@@ -1,0 +1,22 @@
+{
+  "name": "db",
+  "module": "index.ts",
+  "type": "module",
+  "exports": {
+    "./client": "./src/index.ts"
+  },
+  "scripts": {
+    "db:seed": "bun run seed.ts",
+    "build": "tsc -b"
+  },
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "mongoose": "^8.9.5"
+  }
+}
