@@ -1,20 +1,7 @@
 import type { Request, Response } from "express";
 import { Website, WebsiteTick, Incident } from "db/client";
-
-const RANGES: Record<string, number> = {
-  "24h": 24 * 60 * 60 * 1000,
-  "7d": 7 * 24 * 60 * 60 * 1000,
-  "30d": 30 * 24 * 60 * 60 * 1000,
-};
-
-function percentile(sortedAsc: number[], p: number): number {
-  if (sortedAsc.length === 0) return 0;
-  const idx = Math.min(
-    sortedAsc.length - 1,
-    Math.ceil((p / 100) * sortedAsc.length) - 1
-  );
-  return Math.round(sortedAsc[Math.max(0, idx)]);
-}
+import { RANGES, percentile, average, uptimePercent } from "../utils/stats";
+import { findUserWebsiteOr404 } from "../utils/websites";
 
 /**
  * Dashboard summary across all of the user's monitors.
@@ -39,11 +26,8 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     : [];
 
   const upTicks = ticks.filter((t) => t.status === "UP").length;
-  const avgUptime = ticks.length ? (upTicks / ticks.length) * 100 : 100;
-  const avgResponse =
-    ticks.length > 0
-      ? Math.round(ticks.reduce((a, t) => a + (t.latency || 0), 0) / ticks.length)
-      : 0;
+  const avgUptime = uptimePercent(upTicks, ticks.length);
+  const avgResponse = average(ticks.map((t) => t.latency || 0));
 
   const activeIncidents = websiteIds.length
     ? await Incident.countDocuments({ userId, ongoing: true })
@@ -53,7 +37,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     totalMonitors: websites.length,
     up,
     down,
-    avgUptime: Math.round(avgUptime * 100) / 100,
+    avgUptime,
     avgResponseTime: avgResponse,
     activeIncidents,
     checksLast24h: ticks.length,
@@ -70,11 +54,8 @@ export const getWebsiteAnalytics = async (req: Request, res: Response) => {
   const range = (req.query.range as string) in RANGES ? (req.query.range as string) : "24h";
   const since = new Date(Date.now() - RANGES[range]);
 
-  const website = await Website.findOne({ _id: websiteId, userId }).lean();
-  if (!website) {
-    res.status(404).json({ error: "Website not found." });
-    return;
-  }
+  const website = await findUserWebsiteOr404(res, { websiteId, userId });
+  if (!website) return;
 
   const ticks = await WebsiteTick.find({
     websiteId: website._id,
@@ -86,13 +67,10 @@ export const getWebsiteAnalytics = async (req: Request, res: Response) => {
 
   const total = ticks.length;
   const upCount = ticks.filter((t) => t.status === "UP").length;
-  const uptime = total ? (upCount / total) * 100 : 100;
+  const uptime = uptimePercent(upCount, total);
 
   const latencies = ticks.map((t) => t.latency || 0).sort((a, b) => a - b);
-  const avg =
-    latencies.length > 0
-      ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
-      : 0;
+  const avg = average(latencies);
 
   // Bucket into ~40 points for the chart.
   const bucketCount = 40;
@@ -115,7 +93,7 @@ export const getWebsiteAnalytics = async (req: Request, res: Response) => {
 
   res.json({
     range,
-    uptime: Math.round(uptime * 100) / 100,
+    uptime,
     totalChecks: total,
     upChecks: upCount,
     downChecks: total - upCount,
@@ -138,11 +116,8 @@ export const getWebsiteIncidents = async (req: Request, res: Response) => {
   const userId = req.userId!;
   const websiteId = req.params.websiteId;
 
-  const website = await Website.findOne({ _id: websiteId, userId }).lean();
-  if (!website) {
-    res.status(404).json({ error: "Website not found." });
-    return;
-  }
+  const website = await findUserWebsiteOr404(res, { websiteId, userId });
+  if (!website) return;
 
   const incidents = await Incident.find({ websiteId: website._id })
     .sort({ startedAt: -1 })

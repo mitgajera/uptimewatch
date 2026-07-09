@@ -1,8 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
-import { useAuth } from '@clerk/nextjs';
-import { API_BACKEND_URL } from '@/config';
+import { useApiClient } from '@/hooks/useApiClient';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { WebsiteAnalytics, Incident } from './types';
 
@@ -33,7 +31,7 @@ function MetricPill({ label, value, sub }: { label: string; value: string; sub?:
 }
 
 export function MonitorAnalytics({ websiteId }: { websiteId: string }) {
-  const { getToken } = useAuth();
+  const api = useApiClient();
   const [range, setRange] = useState('24h');
   const [analytics, setAnalytics] = useState<WebsiteAnalytics | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -42,11 +40,9 @@ export function MonitorAnalytics({ websiteId }: { websiteId: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const token = await getToken();
-      const headers = { Authorization: `Bearer ${token}` };
       const [a, inc] = await Promise.all([
-        axios.get(`${API_BACKEND_URL}/api/v1/website/${websiteId}/analytics?range=${range}`, { headers }),
-        axios.get(`${API_BACKEND_URL}/api/v1/website/${websiteId}/incidents`, { headers }),
+        api.get<WebsiteAnalytics>(`/website/${websiteId}/analytics?range=${range}`),
+        api.get<{ incidents: Incident[] }>(`/website/${websiteId}/incidents`),
       ]);
       setAnalytics(a.data);
       setIncidents(inc.data.incidents);
@@ -55,7 +51,7 @@ export function MonitorAnalytics({ websiteId }: { websiteId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [websiteId, range, getToken]);
+  }, [websiteId, range, api]);
 
   useEffect(() => { load(); }, [load]);
 

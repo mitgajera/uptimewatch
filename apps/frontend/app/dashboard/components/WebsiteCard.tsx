@@ -1,13 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Power, AreaChart } from 'lucide-react';
-import { useAuth } from '@clerk/nextjs';
 import axios from 'axios';
-import { API_BACKEND_URL } from '@/config';
+import { useApiClient } from '@/hooks/useApiClient';
 import { Website } from './types';
 import { StatusCircle } from './StatusCircle';
 import { UptimeGraph } from './UptimeGraph';
 import { MonitorAnalytics } from './MonitorAnalytics';
-import { aggregateTicksToWindows, calculateUptimePercentage, isValidURL } from './utils';
+import { aggregateTicksToWindows, calculateUptimePercentage, isValidURL, statusLabel, statusTextColor } from './utils';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { PageSpeedInsightsModal } from './PageSpeedInsightsModal';
 
@@ -19,7 +18,7 @@ interface WebsiteCardProps {
 export function WebsiteCard({ website, onDelete }: WebsiteCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [insightOpen, setInsightOpen] = useState(false);
-  const { getToken } = useAuth();
+  const api = useApiClient();
   
   const aggregatedUptime = useMemo(() => 
     website.websiteTicks ? aggregateTicksToWindows(website.websiteTicks.map(tick => ({ createdAt: tick.createdAt, status: tick.status }))) : [],
@@ -51,15 +50,7 @@ export function WebsiteCard({ website, onDelete }: WebsiteCardProps) {
     if (!confirmed) return;
     
     try {
-      const token = await getToken();
-  
-      await axios.delete(`${API_BACKEND_URL}/api/v1/website/${websiteId}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      
+      await api.delete(`/website/${websiteId}`);
       onDelete();
     } catch (error) {
       console.error('Error deleting website:', error);
@@ -90,10 +81,7 @@ export function WebsiteCard({ website, onDelete }: WebsiteCardProps) {
               {lastLatency} ms
             </span>
           )}
-          <span className={`text-sm font-medium ${
-            currentStatus === 'up' ? 'text-green-600' :
-            currentStatus === 'down' ? 'text-red-600' : 'text-gray-500 dark:text-gray-400'
-          }`}>
+          <span className={`text-sm font-medium ${statusTextColor(currentStatus)}`}>
             {uptimePercentage}% Uptime
           </span>
           <Dialog open={insightOpen} onOpenChange={setInsightOpen}>
@@ -141,12 +129,8 @@ export function WebsiteCard({ website, onDelete }: WebsiteCardProps) {
             <div className="grid grid-cols-3 gap-2">
               <div className="bg-gray-50 dark:bg-zinc-800 p-2 rounded">
                 <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
-                <p className={`text-sm font-medium ${
-                  currentStatus === 'up' ? 'text-green-600' :
-                  currentStatus === 'down' ? 'text-red-600' : 'text-gray-500 dark:text-gray-400'
-                }`}>
-                  {currentStatus === 'up' ? 'Online' : 
-                  currentStatus === 'down' ? 'Offline' : 'Unknown'}
+                <p className={`text-sm font-medium ${statusTextColor(currentStatus)}`}>
+                  {statusLabel(currentStatus)}
                 </p>
               </div>
               <div className="bg-gray-50 dark:bg-zinc-800 p-2 rounded">

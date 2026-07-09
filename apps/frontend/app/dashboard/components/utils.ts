@@ -47,6 +47,20 @@ export function calculateUptimePercentage(uptimeWindows: WindowStatus[]): number
   return Math.round((upWindows / knownStatusWindows) * 100);
 }
 
+// Human-readable label for a window status.
+export function statusLabel(status: WindowStatus): string {
+  return status === 'up' ? 'Online' : status === 'down' ? 'Offline' : 'Unknown';
+}
+
+// Tailwind text-color classes for a window status.
+export function statusTextColor(status: WindowStatus): string {
+  return status === 'up'
+    ? 'text-green-600'
+    : status === 'down'
+      ? 'text-red-600'
+      : 'text-gray-500 dark:text-gray-400';
+}
+
 // Helper function to validate URL
 export function isValidURL(urlString: string): boolean {
   try {

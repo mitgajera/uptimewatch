@@ -3,8 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Globe, Plus } from 'lucide-react';
 import { useWebsites } from '@/hooks/useWebsites';
 import axios from 'axios';
-import { API_BACKEND_URL } from '@/config';
-import { useAuth } from '@clerk/nextjs';
+import { useApiClient } from '@/hooks/useApiClient';
 import { WebsiteCard } from './components/WebsiteCard';
 import { AddWebsiteModal } from './components/AddWebsiteModal';
 import { StatsBar } from './components/StatsBar';
@@ -13,20 +12,17 @@ import { DashboardStats } from './components/types';
 export default function DashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { websites, refreshWebsites, error: websitesError } = useWebsites();
-  const { getToken } = useAuth();
+  const api = useApiClient();
   const [stats, setStats] = useState<DashboardStats | null>(null);
 
   const refreshStats = useCallback(async () => {
     try {
-      const token = await getToken();
-      const res = await axios.get(`${API_BACKEND_URL}/api/v1/stats`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.get<DashboardStats>('/stats');
       setStats(res.data);
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
-  }, [getToken]);
+  }, [api]);
 
   useEffect(() => {
     refreshStats();
@@ -35,14 +31,8 @@ export default function DashboardPage() {
   }, [refreshStats]);
 
   const handleAddWebsite = async ({ url, name }: { name: string; url: string }) => {
-    const token = await getToken();
     try {
-      await axios.post(`${API_BACKEND_URL}/api/v1/website`, { url, name }, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      await api.post('/website', { url, name });
       setIsModalOpen(false);
       refreshWebsites();
       refreshStats();
