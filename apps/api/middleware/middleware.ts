@@ -5,6 +5,24 @@ import { JwksClient } from "jwks-rsa";
 // One JWKS client per issuer (Clerk instance), cached across requests.
 const clients: Record<string, JwksClient> = {};
 
+/**
+ * Issuers we trust, parsed from CLERK_ISSUER (comma-separated). The signing key
+ * is fetched from the token's own `iss` claim, so this allowlist is required:
+ * without it an attacker could present a self-signed token whose issuer points
+ * at a JWKS endpoint they control and bypass authentication entirely.
+ */
+const allowedIssuers = (process.env.CLERK_ISSUER || "")
+  .split(",")
+  .map((s) => s.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
+if (allowedIssuers.length === 0) {
+  console.error(
+    "[auth] CLERK_ISSUER is not set. All requests will be rejected. " +
+      "Set CLERK_ISSUER to your Clerk instance issuer URL (comma-separated for multiple)."
+  );
+}
+
 function getJwksClient(issuer: string): JwksClient {
   if (!clients[issuer]) {
     clients[issuer] = new JwksClient({
@@ -43,8 +61,9 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       return;
     }
 
-    // Optionally lock to a specific issuer if configured.
-    if (process.env.CLERK_ISSUER && process.env.CLERK_ISSUER !== issuer) {
+    // Only trust tokens from an explicitly allow-listed issuer. Never fetch a
+    // signing key from an issuer supplied by the (untrusted) token itself.
+    if (!allowedIssuers.includes(issuer.replace(/\/$/, ""))) {
       res.status(401).send("Unauthorized");
       return;
     }
