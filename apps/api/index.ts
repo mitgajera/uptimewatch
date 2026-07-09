@@ -8,7 +8,8 @@ import { scheduleMonitor } from "./cron/monitor";
 import { scheduleWebsiteAlert } from "./cron/websiteAlert";
 
 const app = express();
-app.use(express.json());
+// Cap request body size to mitigate memory-exhaustion DoS via large payloads.
+app.use(express.json({ limit: "10kb" }));
 
 // Allowed CORS origins. Add your production frontend URL via the
 // FRONTEND_URL env var (comma-separated for multiple).

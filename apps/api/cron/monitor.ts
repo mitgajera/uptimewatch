@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import axios from "axios";
 import { Website, WebsiteTick, Notification, Incident } from "db/client";
+import { assertSafeUrl } from "../utils/ssrf";
 
 function log(message: string, data: Record<string, any> = {}) {
   const timestamp = new Date().toISOString();
@@ -20,10 +21,17 @@ async function checkWebsite(website: any) {
   let statusCode: number | null = null;
 
   try {
+    // Re-validate at fetch time to guard against a host that now resolves to a
+    // private address (DNS rebinding) or a URL stored before SSRF checks existed.
+    await assertSafeUrl(website.url);
+
     const response = await axios.get(website.url, {
       timeout: REQUEST_TIMEOUT_MS,
       // Treat any non-5xx response as "reachable"; only 5xx / network errors are DOWN.
       validateStatus: (code) => code < 500,
+      // Do not follow redirects: a public URL could otherwise redirect the
+      // server into a private/internal address, bypassing the SSRF check.
+      maxRedirects: 0,
       headers: { "User-Agent": "UptimeWatch/1.0 (+https://uptimewatch.app)" },
     });
     latency = Date.now() - startTime;
