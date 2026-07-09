@@ -1,8 +1,6 @@
 "use client"
-import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
-import axios from "axios";
-import { API_BACKEND_URL } from "@/config";
+import { useApiClient } from "@/hooks/useApiClient";
 
 interface Website {
     id: string;
@@ -23,18 +21,11 @@ interface Website {
 }
 
 export function useWebsites() {
-    const {getToken } = useAuth()
+    const api = useApiClient()
     const [websites, setWebsites] = useState<Website[]>([])
 
     async function refreshWebsites() {
-        const token = await getToken();
-
-        const res = await axios.get(`${API_BACKEND_URL}/api/v1/websites`, {
-            headers: {
-                Authorization: `Bearer ${token}`, 
-            }
-        })
-        
+        const res = await api.get<{ websites: Website[] }>("/websites")
         setWebsites(res.data.websites)
     }
 

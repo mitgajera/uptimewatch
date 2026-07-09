@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { Website, WebsiteTick } from "db/client";
+import { findUserWebsiteOr404 } from "../utils/websites";
 
 // Map a lean Mongo document's `_id` to `id` (recursively for ticks) so the
 // frontend can keep using `id` instead of `_id`.
@@ -48,16 +49,12 @@ export const getWebsiteStatus = async (req: Request, res: Response) => {
   const websiteId = req.query.websiteId as string;
   const userId = req.userId!;
 
-  const website = await Website.findOne({
-    _id: websiteId,
+  const website = await findUserWebsiteOr404(res, {
+    websiteId,
     userId,
     disabled: false,
-  }).lean();
-
-  if (!website) {
-    res.status(404).json({ error: "Website not found." });
-    return;
-  }
+  });
+  if (!website) return;
 
   const websiteTicks = await WebsiteTick.find({ websiteId: website._id })
     .sort({ createdAt: -1 })
