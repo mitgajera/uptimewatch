@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { Website, WebsiteTick } from "db/client";
 import { findUserWebsiteOr404 } from "../utils/websites";
+import { assertSafeUrl, UnsafeUrlError } from "../utils/ssrf";
 
 // Map a lean Mongo document's `_id` to `id` (recursively for ticks) so the
 // frontend can keep using `id` instead of `_id`.
@@ -25,12 +26,16 @@ export const createWebsite = async (req: Request, res: Response) => {
     return;
   }
 
-  // Basic URL validation.
+  // Validate the URL and ensure it does not target private/internal hosts
+  // (SSRF protection — the server fetches this URL every minute).
   try {
-    const parsed = new URL(url);
-    if (!/^https?:$/.test(parsed.protocol)) throw new Error("bad protocol");
-  } catch {
-    res.status(400).json({ message: "Invalid URL. Include http:// or https://" });
+    await assertSafeUrl(url);
+  } catch (err) {
+    const message =
+      err instanceof UnsafeUrlError
+        ? err.message
+        : "Invalid URL. Include http:// or https://";
+    res.status(400).json({ message });
     return;
   }
 

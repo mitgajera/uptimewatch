@@ -63,7 +63,7 @@ Prerequisites: **Bun**, a **MongoDB** instance (local or Atlas), a **Clerk** app
 bun install
 
 # Configure environment
-cp apps/api/.env.example apps/api/.env       # set MONGODB_URI, JWT_PUBLIC_KEY, RESEND_API_KEY
+cp apps/api/.env.example apps/api/.env       # set MONGODB_URI, CLERK_ISSUER, RESEND_API_KEY
 cp packages/db/.env.example packages/db/.env # set MONGODB_URI
 # In apps/frontend, set Clerk keys + NEXT_PUBLIC_API_BACKEND_URL
 
