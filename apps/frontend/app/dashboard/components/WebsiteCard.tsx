@@ -63,6 +63,11 @@ export function WebsiteCard({ website, onDelete }: WebsiteCardProps) {
       onDelete();
     } catch (error) {
       console.error('Error deleting website:', error);
+      alert(
+        axios.isAxiosError(error)
+          ? error.response?.data?.error || 'Failed to delete website'
+          : 'Failed to delete website'
+      );
     }
   }    
 

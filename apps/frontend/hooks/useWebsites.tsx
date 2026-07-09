@@ -25,17 +25,26 @@ interface Website {
 export function useWebsites() {
     const {getToken } = useAuth()
     const [websites, setWebsites] = useState<Website[]>([])
+    const [error, setError] = useState<string | null>(null)
 
     async function refreshWebsites() {
-        const token = await getToken();
+        try {
+            const token = await getToken();
 
-        const res = await axios.get(`${API_BACKEND_URL}/api/v1/websites`, {
-            headers: {
-                Authorization: `Bearer ${token}`, 
-            }
-        })
-        
-        setWebsites(res.data.websites)
+            const res = await axios.get(`${API_BACKEND_URL}/api/v1/websites`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                }
+            })
+
+            setWebsites(res.data.websites)
+            setError(null)
+        } catch (err) {
+            // Don't let a failed poll bubble up as an unhandled rejection and
+            // silently stop the refresh loop — surface it so callers can react.
+            console.error("Failed to load websites:", err)
+            setError("Failed to load websites.")
+        }
     }
 
     useEffect(() => {
@@ -48,5 +57,5 @@ export function useWebsites() {
         return () => clearInterval(interval);
     }, [])
 
-    return {websites, refreshWebsites};
+    return {websites, refreshWebsites, error};
 }

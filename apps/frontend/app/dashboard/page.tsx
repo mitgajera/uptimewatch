@@ -12,7 +12,7 @@ import { DashboardStats } from './components/types';
 
 export default function DashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { websites, refreshWebsites } = useWebsites();
+  const { websites, refreshWebsites, error: websitesError } = useWebsites();
   const { getToken } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
 
@@ -73,6 +73,12 @@ export default function DashboardPage() {
         </div>
 
         <StatsBar stats={stats} loading={!stats} />
+
+        {websitesError && (
+          <div className="mb-4 rounded-md border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+            {websitesError}
+          </div>
+        )}
 
         {websites.length === 0 ? (
           <div className="text-center py-20 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-xl">

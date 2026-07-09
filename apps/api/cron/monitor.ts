@@ -100,7 +100,21 @@ export const scheduleMonitor = () => {
       if (websites.length === 0) return;
 
       log(`Checking ${websites.length} website(s)`);
-      await Promise.all(websites.map((w) => checkWebsite(w)));
+      // Use allSettled so a failure checking or persisting one website (e.g. a
+      // transient DB write error) doesn't abort the checks for every other site.
+      const results = await Promise.allSettled(websites.map((w) => checkWebsite(w)));
+      for (const [i, result] of results.entries()) {
+        if (result.status === "rejected") {
+          log("Failed to check website", {
+            url: websites[i]?.url,
+            websiteId: websites[i]?._id,
+            error:
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason),
+          });
+        }
+      }
     } catch (err) {
       log("Error running monitor", {
         error: err instanceof Error ? err.message : String(err),
