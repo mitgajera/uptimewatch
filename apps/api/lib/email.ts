@@ -1,6 +1,10 @@
 import { resend } from "../utils/resendClient";
 
-export const sendEmail = async ({ to, subject, text }: {
+export const sendEmail = async ({
+  to,
+  subject,
+  text,
+}: {
   to: string;
   subject: string;
   text: string;
@@ -20,6 +24,7 @@ export const sendEmail = async ({ to, subject, text }: {
     return { ok: false, error: "RESEND_API_KEY is missing." };
   }
 
+  // The Resend SDK resolves with `{ data, error }` on API-level failures.
   const { error } = await resend.emails.send({
     from: process.env.EMAIL_FROM || "UptimeWatch <onboarding@resend.dev>",
     to,
@@ -36,8 +41,7 @@ export const sendEmail = async ({ to, subject, text }: {
     if (isUnverifiedSender) {
       return {
         ok: false,
-        error:
-          `${msg} Set EMAIL_FROM to an address on a verified Resend domain.`,
+        error: `${msg} Set EMAIL_FROM to an address on a verified Resend domain.`,
       };
     }
 

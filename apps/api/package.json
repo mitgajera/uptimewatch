@@ -6,7 +6,9 @@
   "scripts": {
     "start": "bun run index.ts",
     "dev": "bun run index.ts",
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "test": "bun test",
+    "test:coverage": "bun test --coverage"
   },
   "devDependencies": {
     "@types/bun": "latest"

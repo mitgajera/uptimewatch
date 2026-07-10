@@ -1,15 +1,26 @@
-import React, { useState, useMemo } from 'react';
-import { ChevronDown, ChevronUp, Power, AreaChart } from 'lucide-react';
-import { useAuth } from '@clerk/nextjs';
-import axios from 'axios';
-import { API_BACKEND_URL, CLERK_JWT_TEMPLATE } from '@/config';
-import { Website } from './types';
-import { StatusCircle } from './StatusCircle';
-import { UptimeGraph } from './UptimeGraph';
-import { MonitorAnalytics } from './MonitorAnalytics';
-import { aggregateTicksToWindows, calculateUptimePercentage, isValidURL } from './utils';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { PageSpeedInsightsModal } from './PageSpeedInsightsModal';
+import React, { useState, useMemo } from "react";
+import { ChevronDown, ChevronUp, Power, AreaChart } from "lucide-react";
+import axios from "axios";
+import { useApiClient } from "@/hooks/useApiClient";
+import { Website } from "./types";
+import { StatusCircle } from "./StatusCircle";
+import { UptimeGraph } from "./UptimeGraph";
+import { MonitorAnalytics } from "./MonitorAnalytics";
+import {
+  aggregateTicksToWindows,
+  calculateUptimePercentage,
+  isValidURL,
+  statusLabel,
+  statusTextColor,
+} from "./utils";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { PageSpeedInsightsModal } from "./PageSpeedInsightsModal";
 
 interface WebsiteCardProps {
   website: Website;
@@ -19,55 +30,58 @@ interface WebsiteCardProps {
 export function WebsiteCard({ website, onDelete }: WebsiteCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [insightOpen, setInsightOpen] = useState(false);
-  const { getToken } = useAuth();
-  
-  const aggregatedUptime = useMemo(() => 
-    website.websiteTicks ? aggregateTicksToWindows(website.websiteTicks.map(tick => ({ createdAt: tick.createdAt, status: tick.status }))) : [],
+  const api = useApiClient();
+
+  const aggregatedUptime = useMemo(
+    () =>
+      website.websiteTicks
+        ? aggregateTicksToWindows(
+            website.websiteTicks.map((tick) => ({
+              createdAt: tick.createdAt,
+              status: tick.status,
+            }))
+          )
+        : [],
     [website.websiteTicks]
   );
-  
-  const uptimePercentage = useMemo(() => 
-    calculateUptimePercentage(aggregatedUptime),
+
+  const uptimePercentage = useMemo(
+    () => calculateUptimePercentage(aggregatedUptime),
     [aggregatedUptime]
   );
-  
-  const currentStatus = aggregatedUptime.length > 0 
-    ? aggregatedUptime[aggregatedUptime.length - 1] 
-    : 'unknown';
+
+  const currentStatus =
+    aggregatedUptime.length > 0 ? aggregatedUptime[aggregatedUptime.length - 1] : "unknown";
 
   const hostname = website.url && isValidURL(website.url) ? new URL(website.url).hostname : "Invalid URL";
   const websiteName = website.name?.trim() || hostname;
 
-  const lastCheckTime = website.websiteTicks && website.websiteTicks.length > 0
-    ? new Date(website.websiteTicks[0].createdAt).toLocaleTimeString()
-    : 'Never';
+  const lastCheckTime =
+    website.websiteTicks && website.websiteTicks.length > 0
+      ? new Date(website.websiteTicks[0].createdAt).toLocaleTimeString()
+      : "Never";
 
-  const lastLatency = website.websiteTicks && website.websiteTicks.length > 0
-    ? Math.round(website.websiteTicks[0].latency)
-    : null;
+  const lastLatency =
+    website.websiteTicks && website.websiteTicks.length > 0
+      ? Math.round(website.websiteTicks[0].latency)
+      : null;
 
   async function handleDeleteWebsite(websiteId: string) {
     const confirmed = window.confirm("Are you sure you want to delete this website?");
     if (!confirmed) return;
-    
+
     try {
-      const token = await getToken(
-        CLERK_JWT_TEMPLATE ? { template: CLERK_JWT_TEMPLATE } : undefined
-      );
-      if (!token) return;
-  
-      await axios.delete(`${API_BACKEND_URL}/api/v1/website/${websiteId}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      
+      await api.delete(`/website/${websiteId}`);
       onDelete();
     } catch (error) {
-      console.error('Error deleting website:', error);
+      console.error("Error deleting website:", error);
+      alert(
+        axios.isAxiosError(error)
+          ? error.response?.data?.error || "Failed to delete website"
+          : "Failed to delete website"
+      );
     }
-  }    
+  }
 
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-md overflow-hidden">
@@ -88,16 +102,16 @@ export function WebsiteCard({ website, onDelete }: WebsiteCardProps) {
               {lastLatency} ms
             </span>
           )}
-          <span className={`text-sm font-medium ${
-            currentStatus === 'up' ? 'text-green-600' :
-            currentStatus === 'down' ? 'text-red-600' : 'text-gray-500 dark:text-gray-400'
-          }`}>
+          <span className={`text-sm font-medium ${statusTextColor(currentStatus)}`}>
             {uptimePercentage}% Uptime
           </span>
           <Dialog open={insightOpen} onOpenChange={setInsightOpen}>
             <DialogTrigger asChild>
               <button
-                onClick={e => { e.stopPropagation(); setInsightOpen(true); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setInsightOpen(true);
+                }}
                 className="text-blue-500 hover:text-blue-600 cursor-pointer"
                 title="View PageSpeed Insights"
               >
@@ -106,16 +120,16 @@ export function WebsiteCard({ website, onDelete }: WebsiteCardProps) {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle className='pt-2 pl-2'>PageSpeed Insights</DialogTitle>
+                <DialogTitle className="pt-2 pl-2">PageSpeed Insights</DialogTitle>
               </DialogHeader>
               <PageSpeedInsightsModal url={website.url} />
             </DialogContent>
           </Dialog>
-          <button 
+          <button
             onClick={(e) => {
               e.stopPropagation();
               handleDeleteWebsite(website.id);
-            }} 
+            }}
             className="text-red-500 hover:text-red-600 cursor-pointer"
             title="Disable website"
           >
@@ -139,12 +153,8 @@ export function WebsiteCard({ website, onDelete }: WebsiteCardProps) {
             <div className="grid grid-cols-3 gap-2">
               <div className="bg-gray-50 dark:bg-zinc-800 p-2 rounded">
                 <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
-                <p className={`text-sm font-medium ${
-                  currentStatus === 'up' ? 'text-green-600' :
-                  currentStatus === 'down' ? 'text-red-600' : 'text-gray-500 dark:text-gray-400'
-                }`}>
-                  {currentStatus === 'up' ? 'Online' : 
-                  currentStatus === 'down' ? 'Offline' : 'Unknown'}
+                <p className={`text-sm font-medium ${statusTextColor(currentStatus)}`}>
+                  {statusLabel(currentStatus)}
                 </p>
               </div>
               <div className="bg-gray-50 dark:bg-zinc-800 p-2 rounded">
@@ -165,4 +175,4 @@ export function WebsiteCard({ website, onDelete }: WebsiteCardProps) {
       )}
     </div>
   );
-} 
+}

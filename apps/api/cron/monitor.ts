@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import axios from "axios";
 import { Website, WebsiteTick, Notification, Incident } from "db/client";
+import { assertSafeUrl } from "../utils/ssrf";
 
 function log(message: string, data: Record<string, any> = {}) {
   const timestamp = new Date().toISOString();
@@ -20,10 +21,17 @@ async function checkWebsite(website: any) {
   let statusCode: number | null = null;
 
   try {
+    // Re-validate at fetch time to guard against a host that now resolves to a
+    // private address (DNS rebinding) or a URL stored before SSRF checks existed.
+    await assertSafeUrl(website.url);
+
     const response = await axios.get(website.url, {
       timeout: REQUEST_TIMEOUT_MS,
       // Treat any non-5xx response as "reachable"; only 5xx / network errors are DOWN.
       validateStatus: (code) => code < 500,
+      // Do not follow redirects: a public URL could otherwise redirect the
+      // server into a private/internal address, bypassing the SSRF check.
+      maxRedirects: 0,
       headers: { "User-Agent": "UptimeWatch/1.0 (+https://uptimewatch.app)" },
     });
     latency = Date.now() - startTime;
@@ -100,7 +108,21 @@ export const scheduleMonitor = () => {
       if (websites.length === 0) return;
 
       log(`Checking ${websites.length} website(s)`);
-      await Promise.all(websites.map((w) => checkWebsite(w)));
+      // Use allSettled so a failure checking or persisting one website (e.g. a
+      // transient DB write error) doesn't abort the checks for every other site.
+      const results = await Promise.allSettled(websites.map((w) => checkWebsite(w)));
+      for (const [i, result] of results.entries()) {
+        if (result.status === "rejected") {
+          log("Failed to check website", {
+            url: websites[i]?.url,
+            websiteId: websites[i]?._id,
+            error:
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason),
+          });
+        }
+      }
     } catch (err) {
       log("Error running monitor", {
         error: err instanceof Error ? err.message : String(err),

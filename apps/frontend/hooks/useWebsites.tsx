@@ -1,55 +1,50 @@
-"use client"
-import { useAuth } from "@clerk/nextjs";
+"use client";
 import { useEffect, useState } from "react";
-import axios from "axios";
-import { API_BACKEND_URL, CLERK_JWT_TEMPLATE } from "@/config";
+import { useApiClient } from "@/hooks/useApiClient";
 
 interface Website {
+  id: string;
+  url: string;
+  name?: string;
+  userId: string;
+  disabled: boolean;
+  isDown?: boolean;
+  websiteTicks: {
     id: string;
-    url: string;
-    name?: string;
-    userId: string;
-    disabled: boolean;
-    isDown?: boolean;
-    websiteTicks: {
-        id: string;
-        websiteId: string;
-        createdAt: string;
-        updatedAt: string;
-        status: string;
-        latency: number;
-        statusCode?: number | null;
-    }[];
+    websiteId: string;
+    createdAt: string;
+    updatedAt: string;
+    status: string;
+    latency: number;
+    statusCode?: number | null;
+  }[];
 }
 
 export function useWebsites() {
-    const {getToken } = useAuth()
-    const [websites, setWebsites] = useState<Website[]>([])
+  const api = useApiClient();
+  const [websites, setWebsites] = useState<Website[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-    async function refreshWebsites() {
-        const token = await getToken(
-            CLERK_JWT_TEMPLATE ? { template: CLERK_JWT_TEMPLATE } : undefined
-        );
-        if (!token) return;
-
-        const res = await axios.get(`${API_BACKEND_URL}/api/v1/websites`, {
-            headers: {
-                Authorization: `Bearer ${token}`, 
-            }
-        })
-        
-        setWebsites(res.data.websites)
+  async function refreshWebsites() {
+    try {
+      const res = await api.get<{ websites: Website[] }>("/websites");
+      setWebsites(res.data.websites);
+      setError(null);
+    } catch (err) {
+      console.error("Failed to load websites:", err);
+      setError("Failed to load websites.");
     }
+  }
 
-    useEffect(() => {
-        refreshWebsites();
+  useEffect(() => {
+    refreshWebsites();
 
-        const interval = setInterval(() => {
-            refreshWebsites();
-        }, 1000 * 60 * 1);
+    const interval = setInterval(() => {
+      refreshWebsites();
+    }, 1000 * 60);
 
-        return () => clearInterval(interval);
-    }, [])
+    return () => clearInterval(interval);
+  }, []);
 
-    return {websites, refreshWebsites};
+  return { websites, refreshWebsites, error };
 }
