@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { Notification, User } from "db/client";
-import { sendEmail } from "../lib/email"; // email helper
+import { sendEmail } from "../lib/email";
 
 export const scheduleWebsiteAlert = () => {
   cron.schedule("*/2 * * * *", async () => {
@@ -8,23 +8,35 @@ export const scheduleWebsiteAlert = () => {
 
     try {
       const notifications = await Notification.find({ sent: false })
-        .limit(10) // avoid spikes
+        .limit(10)
         .lean();
 
       for (const notif of notifications) {
         if (!notif.userId) continue;
 
         const user = await User.findById(notif.userId).select("email").lean();
-        if (!user || !user.email) continue;
+        if (!user?.email) continue;
 
         try {
-          await sendEmail({
+          const result = await sendEmail({
             to: user.email,
-            subject: "🔔 New Notification",
+            subject: "New Notification",
             text: notif.message,
           });
 
+          if (!result.ok) {
+            console.error(
+              `[CRON] Email not sent for notif ${notif._id}: ${result.error}`
+            );
+            continue;
+          }
+
           await Notification.updateOne({ _id: notif._id }, { $set: { sent: true } });
+
+          if (result.skipped) {
+            console.log(`[CRON] Email paused; marked notif ${notif._id} as sent`);
+            continue;
+          }
 
           console.log(`[CRON] Sent and updated notif ${notif._id}`);
         } catch (err) {

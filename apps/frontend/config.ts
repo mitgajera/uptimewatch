@@ -1,1 +1,2 @@
-export const API_BACKEND_URL=process.env.NEXT_PUBLIC_API_BACKEND_URL;
+export const API_BACKEND_URL = process.env.NEXT_PUBLIC_API_BACKEND_URL;
+export const CLERK_JWT_TEMPLATE = process.env.NEXT_PUBLIC_CLERK_JWT_TEMPLATE;

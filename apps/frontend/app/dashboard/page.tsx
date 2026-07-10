@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Globe, Plus } from 'lucide-react';
 import { useWebsites } from '@/hooks/useWebsites';
 import axios from 'axios';
-import { API_BACKEND_URL } from '@/config';
+import { API_BACKEND_URL, CLERK_JWT_TEMPLATE } from '@/config';
 import { useAuth } from '@clerk/nextjs';
 import { WebsiteCard } from './components/WebsiteCard';
 import { AddWebsiteModal } from './components/AddWebsiteModal';
@@ -18,7 +18,10 @@ export default function DashboardPage() {
 
   const refreshStats = useCallback(async () => {
     try {
-      const token = await getToken();
+      const token = await getToken(
+        CLERK_JWT_TEMPLATE ? { template: CLERK_JWT_TEMPLATE } : undefined
+      );
+      if (!token) return;
       const res = await axios.get(`${API_BACKEND_URL}/api/v1/stats`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -35,7 +38,10 @@ export default function DashboardPage() {
   }, [refreshStats]);
 
   const handleAddWebsite = async ({ url, name }: { name: string; url: string }) => {
-    const token = await getToken();
+    const token = await getToken(
+      CLERK_JWT_TEMPLATE ? { template: CLERK_JWT_TEMPLATE } : undefined
+    );
+    if (!token) return;
     try {
       await axios.post(`${API_BACKEND_URL}/api/v1/website`, { url, name }, {
         headers: {

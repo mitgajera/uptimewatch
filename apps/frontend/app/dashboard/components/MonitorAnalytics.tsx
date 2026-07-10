@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '@clerk/nextjs';
-import { API_BACKEND_URL } from '@/config';
+import { API_BACKEND_URL, CLERK_JWT_TEMPLATE } from '@/config';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { WebsiteAnalytics, Incident } from './types';
 
@@ -42,7 +42,10 @@ export function MonitorAnalytics({ websiteId }: { websiteId: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const token = await getToken();
+      const token = await getToken(
+        CLERK_JWT_TEMPLATE ? { template: CLERK_JWT_TEMPLATE } : undefined
+      );
+      if (!token) return;
       const headers = { Authorization: `Bearer ${token}` };
       const [a, inc] = await Promise.all([
         axios.get(`${API_BACKEND_URL}/api/v1/website/${websiteId}/analytics?range=${range}`, { headers }),

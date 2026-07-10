@@ -17,15 +17,19 @@ function getJwksClient(issuer: string): JwksClient {
   return clients[issuer];
 }
 
+function normalizeIssuer(issuer?: string): string | undefined {
+  return issuer?.trim().replace(/\/+$/, "");
+}
+
 export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       res.status(401).send("Unauthorized");
       return;
     }
 
-    const token = authHeader.split(" ")[1];
+    const token = authHeader.slice("Bearer ".length).trim();
     if (!token) {
       res.status(401).send("Unauthorized");
       return;
@@ -33,28 +37,34 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 
     // Decode (without verifying) to find the issuer and signing key id.
     const decoded = jwt.decode(token, { complete: true });
-    const issuer = decoded?.payload && typeof decoded.payload !== "string"
+    const tokenIssuer = decoded?.payload && typeof decoded.payload !== "string"
       ? (decoded.payload.iss as string | undefined)
       : undefined;
     const kid = decoded?.header?.kid;
 
-    if (!issuer || !kid) {
+    const normalizedTokenIssuer = normalizeIssuer(tokenIssuer);
+    if (!normalizedTokenIssuer || !kid) {
       res.status(401).send("Unauthorized");
       return;
     }
 
     // Optionally lock to a specific issuer if configured.
-    if (process.env.CLERK_ISSUER && process.env.CLERK_ISSUER !== issuer) {
+    const configuredIssuer = normalizeIssuer(process.env.CLERK_ISSUER);
+    if (configuredIssuer && configuredIssuer !== normalizedTokenIssuer) {
+      console.error("Auth error: issuer mismatch", {
+        configuredIssuer,
+        tokenIssuer: normalizedTokenIssuer,
+      });
       res.status(401).send("Unauthorized");
       return;
     }
 
-    const signingKey = await getJwksClient(issuer).getSigningKey(kid);
+    const signingKey = await getJwksClient(normalizedTokenIssuer).getSigningKey(kid);
     const publicKey = signingKey.getPublicKey();
 
     const verified = jwt.verify(token, publicKey, {
       algorithms: ["RS256"],
-      issuer,
+      issuer: normalizedTokenIssuer,
     });
 
     const sub =

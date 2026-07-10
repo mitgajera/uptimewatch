@@ -2,7 +2,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { API_BACKEND_URL } from "@/config";
+import { API_BACKEND_URL, CLERK_JWT_TEMPLATE } from "@/config";
 
 interface Website {
     id: string;
@@ -27,7 +27,10 @@ export function useWebsites() {
     const [websites, setWebsites] = useState<Website[]>([])
 
     async function refreshWebsites() {
-        const token = await getToken();
+        const token = await getToken(
+            CLERK_JWT_TEMPLATE ? { template: CLERK_JWT_TEMPLATE } : undefined
+        );
+        if (!token) return;
 
         const res = await axios.get(`${API_BACKEND_URL}/api/v1/websites`, {
             headers: {

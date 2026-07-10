@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Power, AreaChart } from 'lucide-react';
 import { useAuth } from '@clerk/nextjs';
 import axios from 'axios';
-import { API_BACKEND_URL } from '@/config';
+import { API_BACKEND_URL, CLERK_JWT_TEMPLATE } from '@/config';
 import { Website } from './types';
 import { StatusCircle } from './StatusCircle';
 import { UptimeGraph } from './UptimeGraph';
@@ -51,7 +51,10 @@ export function WebsiteCard({ website, onDelete }: WebsiteCardProps) {
     if (!confirmed) return;
     
     try {
-      const token = await getToken();
+      const token = await getToken(
+        CLERK_JWT_TEMPLATE ? { template: CLERK_JWT_TEMPLATE } : undefined
+      );
+      if (!token) return;
   
       await axios.delete(`${API_BACKEND_URL}/api/v1/website/${websiteId}`, {
         headers: {

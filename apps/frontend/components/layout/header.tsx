@@ -10,6 +10,7 @@ import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from "@cl
 import axios from "axios"
 import { useAuth } from "@clerk/nextjs";
 import { useUser } from '@clerk/nextjs';
+import { API_BACKEND_URL, CLERK_JWT_TEMPLATE } from "@/config";
 
 const NavLinks = ({ onClick }: { onClick?: () => void }) => (
   <>
@@ -42,11 +43,13 @@ export function Header() {
   // Sync the signed-in Clerk user into our backend so we can email them alerts.
   useEffect(() => {
     const syncUser = async () => {
-      const token = await getToken();
+      const token = await getToken(
+        CLERK_JWT_TEMPLATE ? { template: CLERK_JWT_TEMPLATE } : undefined
+      );
       if (!token || !user) return;
 
       try {
-        await axios.post(`${process.env.NEXT_PUBLIC_API_BACKEND_URL}/api/v1/user/sync`, {
+        await axios.post(`${API_BACKEND_URL}/api/v1/user/sync`, {
           name: user.fullName || user.username || '',
           email: user.emailAddresses[0]?.emailAddress || '',
         }, {
