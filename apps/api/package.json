@@ -6,6 +6,7 @@
   "scripts": {
     "start": "bun run index.ts",
     "dev": "bun run index.ts",
+    "worker": "bun run worker.ts",
     "build": "tsc -b",
     "test": "bun test",
     "test:coverage": "bun test --coverage"

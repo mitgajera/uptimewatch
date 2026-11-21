@@ -5,8 +5,9 @@ import { startScheduledJobs } from "./jobs/scheduler";
 async function start() {
   await connectDB();
 
-  // Start background jobs once the DB is connected.
-  startScheduledJobs();
+  // Background jobs run in-process by default. Set RUN_SCHEDULERS=false when
+  // running them in a separate worker (bun run worker).
+  if (process.env.RUN_SCHEDULERS !== "false") startScheduledJobs();
 
   const port = Number(process.env.PORT) || 8080;
   app.listen(port, () => {
