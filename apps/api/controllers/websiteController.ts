@@ -226,7 +226,8 @@ export const getAllWebsites = async (req: Request, res: Response) => {
       return {
         ...serializeWebsite(website, ticksByWebsite.get(String(website._id)) ?? []),
         uptime24h: d ? uptimePercent(d.up, d.total) : null,
-        avgLatency24h: d ? Math.round(d.avgLatency) : null,
+        // Heartbeats have no response time; their ticks record 0.
+        avgLatency24h: d && website.type !== "heartbeat" ? Math.round(d.avgLatency) : null,
         checks24h: d?.total ?? 0,
       };
     }),
