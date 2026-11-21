@@ -45,6 +45,12 @@ describe("app", () => {
     expect(res.headers.get("ratelimit-policy")).toBeTruthy();
   });
 
+  test("public routes do not require auth", async () => {
+    const res = await fetch(`${base}/api/v1/public/status-pages/!!`);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "Status page not found." });
+  });
+
   test("unknown routes return JSON 404", async () => {
     const res = await fetch(`${base}/nope`);
     expect(res.status).toBe(404);
