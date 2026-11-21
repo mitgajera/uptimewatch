@@ -8,6 +8,7 @@ import websiteRoutes from "./routes/websiteRoutes";
 import userRoutes from "./routes/userRoutes";
 import alertChannelRoutes from "./routes/alertChannelRoutes";
 import statusPageRoutes from "./routes/statusPageRoutes";
+import publicRoutes from "./routes/publicRoutes";
 
 export const app = express();
 // Behind a proxy/load balancer, trust the first hop for client IPs (rate limits).
@@ -48,6 +49,9 @@ app.use(
     message: { error: "Too many requests, please slow down." },
   })
 );
+
+// Public (unauthenticated) routes must be mounted before the auth-gated ones.
+app.use("/api/v1/public", publicRoutes);
 
 // Routes
 app.use("/api/v1", authMiddleware, websiteRoutes);
