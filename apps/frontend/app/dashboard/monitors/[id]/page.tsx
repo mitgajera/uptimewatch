@@ -37,6 +37,7 @@ import { LatencyChart } from "@/components/monitors/latency-chart";
 import { IncidentList } from "@/components/monitors/incident-list";
 import { MonitorFormDialog } from "@/components/monitors/monitor-form-dialog";
 import { DeleteMonitorDialog } from "@/components/monitors/delete-monitor-dialog";
+import { HeartbeatSetup } from "@/components/monitors/heartbeat-setup";
 import { PageSpeedInsightsModal } from "@/components/monitors/pagespeed-panel";
 
 const RANGES: AnalyticsRange[] = ["24h", "7d", "30d"];
@@ -127,6 +128,8 @@ export default function MonitorDetailPage({ params }: { params: Promise<{ id: st
   const state = monitorState(m);
   const name = displayName(m);
   const lastFailure = m.websiteTicks.find((t) => t.status === "DOWN");
+  const isHeartbeat = m.type === "heartbeat";
+  const graceMinutes = Math.round((m.graceSeconds ?? 300) / 60);
 
   async function togglePause() {
     try {
@@ -152,6 +155,11 @@ export default function MonitorDetailPage({ params }: { params: Promise<{ id: st
           <div className="min-w-0 space-y-1">
             <StatusLabel state={state} />
             <h1 className="truncate text-2xl font-semibold tracking-tight">{name}</h1>
+            {isHeartbeat ? (
+              <p className="text-sm text-muted-foreground">
+                Heartbeat · last ping {timeAgo(m.lastHeartbeatAt)}
+              </p>
+            ) : (
             <a
               href={m.url}
               target="_blank"
@@ -162,8 +170,11 @@ export default function MonitorDetailPage({ params }: { params: Promise<{ id: st
               <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
               <span className="sr-only">(opens in a new tab)</span>
             </a>
+            )}
             <p className="text-xs text-muted-foreground">
-              {m.method} every {formatInterval(m.intervalSeconds)} · checked {timeAgo(m.lastCheckedAt)}
+              {isHeartbeat
+                ? `Expected every ${formatInterval(m.intervalSeconds)} + ${graceMinutes} min grace`
+                : `${m.method} every ${formatInterval(m.intervalSeconds)} · checked ${timeAgo(m.lastCheckedAt)}`}
             </p>
           </div>
 
@@ -176,10 +187,12 @@ export default function MonitorDetailPage({ params }: { params: Promise<{ id: st
               <Pencil className="size-4" aria-hidden="true" />
               Edit
             </Button>
-            <Button variant="outline" onClick={() => setSpeedOpen(true)}>
-              <Gauge className="size-4" aria-hidden="true" />
-              PageSpeed
-            </Button>
+            {!isHeartbeat && (
+              <Button variant="outline" onClick={() => setSpeedOpen(true)}>
+                <Gauge className="size-4" aria-hidden="true" />
+                PageSpeed
+              </Button>
+            )}
             <Button
               variant="outline"
               className="text-destructive hover:text-destructive"
@@ -207,25 +220,43 @@ export default function MonitorDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {isHeartbeat && (
+        <Section title="Setup">
+          <HeartbeatSetup monitor={m} />
+        </Section>
+      )}
+
+      <div className={cn("grid grid-cols-2 gap-3", isHeartbeat ? "lg:grid-cols-3" : "lg:grid-cols-4")}>
         <Stat
           label={`Uptime (${range})`}
           value={analytics.data ? formatUptime(analytics.data.uptime) : "—"}
           hint={analytics.data ? `${analytics.data.downChecks} failed of ${analytics.data.totalChecks}` : undefined}
         />
+        {!isHeartbeat && (
         <Stat
           label="Avg response"
           value={analytics.data ? formatLatency(analytics.data.latency.avg) : "—"}
           hint={analytics.data ? `p95 ${formatLatency(analytics.data.latency.p95)}` : undefined}
         />
-        <Stat label="Last response" value={formatLatency(m.lastLatency)} hint={m.lastStatusCode ? `HTTP ${m.lastStatusCode}` : undefined} />
-        <Stat
-          label="SSL certificate"
-          value={<SslSummary monitor={m} />}
-          hint={m.sslIssuer ?? undefined}
-        />
+        )}
+        {isHeartbeat ? (
+          <>
+            <Stat label="Last ping" value={timeAgo(m.lastHeartbeatAt)} />
+            <Stat label="Ping period" value={formatInterval(m.intervalSeconds)} hint={`${graceMinutes} min grace`} />
+          </>
+        ) : (
+          <>
+            <Stat
+              label="Last response"
+              value={formatLatency(m.lastLatency)}
+              hint={m.lastStatusCode ? `HTTP ${m.lastStatusCode}` : undefined}
+            />
+            <Stat label="SSL certificate" value={<SslSummary monitor={m} />} hint={m.sslIssuer ?? undefined} />
+          </>
+        )}
       </div>
 
+      {!isHeartbeat && (
       <Section
         title="Response time"
         action={
@@ -265,6 +296,9 @@ export default function MonitorDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </Section>
 
+      )}
+
+      {!isHeartbeat && (
       <Section title="Last 30 minutes">
         <div className="rounded-lg border bg-card p-4">
           <RecentChecksBar ticks={m.websiteTicks} />
@@ -274,6 +308,8 @@ export default function MonitorDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       </Section>
+
+      )}
 
       <Section title="Incidents">
         {incidents.isPending ? (
@@ -292,7 +328,12 @@ export default function MonitorDetailPage({ params }: { params: Promise<{ id: st
 
       <Section title="Configuration">
         <dl className="grid gap-x-6 gap-y-3 rounded-lg border bg-card p-4 text-sm sm:grid-cols-2">
-          {[
+          {(isHeartbeat
+            ? [
+                ["Ping period", formatInterval(m.intervalSeconds)],
+                ["Grace period", `${graceMinutes} min`],
+              ]
+            : [
             ["Method", m.method],
             ["Interval", formatInterval(m.intervalSeconds)],
             ["Timeout", `${m.timeoutMs / 1000}s`],
@@ -300,7 +341,7 @@ export default function MonitorDetailPage({ params }: { params: Promise<{ id: st
             ["Alert after", `${m.failureThreshold} failed check${m.failureThreshold === 1 ? "" : "s"}`],
             ["Follow redirects", m.followRedirects ? "Yes" : "No"],
             ["Required text", m.keyword ? `“${m.keyword}”` : "None"],
-          ].map(([k, v]) => (
+          ]).map(([k, v]) => (
             <div key={k} className="flex justify-between gap-4 sm:block">
               <dt className="text-muted-foreground">{k}</dt>
               <dd className="font-medium break-words">{v}</dd>
