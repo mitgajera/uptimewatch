@@ -1,4 +1,4 @@
-import type { CheckErrorType } from "db/client";
+import type { CheckErrorType } from "db/constants";
 import { UnsafeUrlError } from "../utils/ssrf";
 
 const DNS_CODES = new Set(["ENOTFOUND", "EAI_AGAIN", "ENODATA", "ESERVFAIL"]);

@@ -15,7 +15,7 @@ function deps(overrides: Partial<CheckDeps> = {}): CheckDeps {
 
 describe("runHttpCheck", () => {
   test("reports UP with status code and latency for a healthy response", async () => {
-    const result = await runHttpCheck("https://ok.dev", deps());
+    const result = await runHttpCheck({ url: "https://ok.dev" }, deps());
     expect(result).toMatchObject({ status: "UP", statusCode: 200, latency: 50 });
   });
 
@@ -23,14 +23,14 @@ describe("runHttpCheck", () => {
     const request = mock(async () => {
       throw Object.assign(new Error("Request failed"), { response: { status: 503 } });
     });
-    const result = await runHttpCheck("https://bad.dev", deps({ request: request as any }));
+    const result = await runHttpCheck({ url: "https://bad.dev" }, deps({ request: request as any }));
     expect(result).toMatchObject({ status: "DOWN", statusCode: 503 });
   });
 
   test("reports DOWN without making a request when the URL is unsafe", async () => {
-    const request = mock(async () => ({ status: 200 }));
+    const request = mock(async (_config: any) => ({ status: 200 }));
     const result = await runHttpCheck(
-      "http://169.254.169.254",
+      { url: "http://169.254.169.254" },
       deps({
         request: request as any,
         assertSafeUrl: mock(async () => {
@@ -46,7 +46,7 @@ describe("runHttpCheck", () => {
 describe("runHttpCheck failure classification", () => {
   const fail = (err: object) =>
     runHttpCheck(
-      "https://x.dev",
+      { url: "https://x.dev" },
       deps({ request: mock(async () => { throw Object.assign(new Error("boom"), err); }) as any })
     );
 
@@ -73,7 +73,7 @@ describe("runHttpCheck failure classification", () => {
 
   test("blocked (SSRF) targets", async () => {
     const result = await runHttpCheck(
-      "http://10.0.0.1",
+      { url: "http://10.0.0.1" },
       deps({
         assertSafeUrl: mock(async () => {
           throw new UnsafeUrlError("URL resolves to a private or reserved address");
@@ -84,9 +84,59 @@ describe("runHttpCheck failure classification", () => {
   });
 
   test("successful checks carry no error", async () => {
-    expect(await runHttpCheck("https://ok.dev", deps())).toMatchObject({
+    expect(await runHttpCheck({ url: "https://ok.dev" }, deps())).toMatchObject({
       errorType: null,
       errorMessage: null,
     });
+  });
+});
+
+describe("runHttpCheck monitor configuration", () => {
+  test("passes method and timeout through to the request", async () => {
+    const request = mock(async (_config: any) => ({ status: 200 }));
+    await runHttpCheck(
+      { url: "https://x.dev", method: "HEAD", timeoutMs: 3000 },
+      deps({ request: request as any })
+    );
+    expect(request.mock.calls[0]![0]).toMatchObject({ method: "HEAD", timeout: 3000 });
+  });
+
+  test("treats 4xx as DOWN by default", async () => {
+    const request = mock(async (_config: any) => ({ status: 404 }));
+    const result = await runHttpCheck({ url: "https://x.dev" }, deps({ request: request as any }));
+    expect(result).toMatchObject({ status: "DOWN", statusCode: 404, errorType: "HTTP_STATUS" });
+  });
+
+  test("honors a custom expected status spec", async () => {
+    const request = mock(async (_config: any) => ({ status: 401 }));
+    const result = await runHttpCheck(
+      { url: "https://x.dev", expectedStatus: "200-299,401" },
+      deps({ request: request as any })
+    );
+    expect(result.status).toBe("UP");
+  });
+
+  test("requires the keyword in the body when configured", async () => {
+    const request = mock(async (_config: any) => ({ status: 200, data: "<h1>Maintenance</h1>" }));
+    const missing = await runHttpCheck(
+      { url: "https://x.dev", keyword: "Welcome" },
+      deps({ request: request as any })
+    );
+    expect(missing).toMatchObject({ status: "DOWN", errorType: "KEYWORD" });
+    expect(request.mock.calls[0]![0]).toMatchObject({ responseType: "text" });
+
+    const present = await runHttpCheck(
+      { url: "https://x.dev", keyword: "Maintenance" },
+      deps({ request: request as any })
+    );
+    expect(present.status).toBe("UP");
+  });
+
+  test("streams and discards the body when no keyword is set", async () => {
+    const destroy = mock(() => {});
+    const request = mock(async (_config: any) => ({ status: 200, data: { destroy } }));
+    await runHttpCheck({ url: "https://x.dev" }, deps({ request: request as any }));
+    expect(request.mock.calls[0]![0]).toMatchObject({ responseType: "stream" });
+    expect(destroy).toHaveBeenCalled();
   });
 });

@@ -13,7 +13,7 @@ function log(message: string, data: Record<string, any> = {}) {
  * open/close incidents + fire UP/DOWN notifications when the state changes.
  */
 async function checkWebsite(website: any) {
-  const result = await runHttpCheck(website.url);
+  const result = await runHttpCheck(website);
   const { status, latency, statusCode, errorType, errorMessage } = result;
   if (status === "DOWN") {
     log("Website check failed", { url: website.url, statusCode, errorType, errorMessage });
