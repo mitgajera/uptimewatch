@@ -93,10 +93,38 @@ export const deleteAlertChannel = async (req: Request, res: Response) => {
   res.json({ message: "Alert channel deleted." });
 };
 
+/**
+ * Test sends go to unverified addresses from the platform's sender, so cap
+ * them per user (in memory: a per-instance limit is enough to stop abuse).
+ */
+const TEST_SENDS_PER_WINDOW = 5;
+const TEST_WINDOW_MS = 10 * 60_000;
+const recentTestSends = new Map<string, number[]>();
+
+function allowTestSend(userId: string, now = Date.now()): boolean {
+  const recent = (recentTestSends.get(userId) ?? []).filter((t) => now - t < TEST_WINDOW_MS);
+  if (recent.length >= TEST_SENDS_PER_WINDOW) {
+    recentTestSends.set(userId, recent);
+    return false;
+  }
+  recent.push(now);
+  recentTestSends.set(userId, recent);
+  return true;
+}
+
+/** Test hook. */
+export function resetTestSendLimits() {
+  recentTestSends.clear();
+}
+
 /** Send a test alert so users can verify a channel works end to end. */
 export const testAlertChannel = async (req: Request, res: Response) => {
   const channel = await findOwnedChannel(req, res);
   if (!channel) return;
+  if (!allowTestSend(req.userId!)) {
+    res.status(429).json({ message: "Too many test alerts. Try again in a few minutes." });
+    return;
+  }
 
   const result = await deliver(
     { type: channel.type, target: channel.target },

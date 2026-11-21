@@ -17,7 +17,7 @@ const AlertChannel = {
 };
 mockDb({ AlertChannel });
 
-const { createAlertChannel, updateAlertChannel, deleteAlertChannel } = await import(
+const { createAlertChannel, updateAlertChannel, deleteAlertChannel, testAlertChannel, resetTestSendLimits } = await import(
   "../controllers/alertChannelController"
 );
 
@@ -106,5 +106,20 @@ describe("update/delete", () => {
     await deleteAlertChannel(mockReq({ params: { channelId: ID } as any }), res);
     expect(res.statusCode).toBe(200);
     expect(AlertChannel.deleteOne).toHaveBeenCalledWith({ _id: ID, userId: "user_1" });
+  });
+});
+
+describe("testAlertChannel", () => {
+  test("caps test sends per user", async () => {
+    resetTestSendLimits();
+    // Email delivery is skipped (reported ok) unless EMAIL_NOTIFICATIONS_ENABLED is set.
+    AlertChannel.findOne.mockReturnValue(query({ _id: ID, userId: "user_1", type: "email", target: "ops@acme.dev" }));
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      const res = mockRes();
+      await testAlertChannel(mockReq({ params: { channelId: ID } as any }), res);
+      statuses.push(res.statusCode);
+    }
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
   });
 });
