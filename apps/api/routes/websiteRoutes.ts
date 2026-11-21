@@ -4,6 +4,8 @@ import {
   getWebsiteStatus,
   getAllWebsites,
   disableWebsite,
+  getWebsite,
+  updateWebsite,
 } from "../controllers/websiteController";
 import {
   getDashboardStats,
@@ -16,6 +18,8 @@ const router = Router();
 router.post("/website", createWebsite);
 router.get("/website/status", getWebsiteStatus);
 router.get("/websites", getAllWebsites);
+router.get("/website/:websiteId", getWebsite);
+router.patch("/website/:websiteId", updateWebsite);
 router.delete("/website/:websiteId", disableWebsite);
 
 // Analytics & incidents
