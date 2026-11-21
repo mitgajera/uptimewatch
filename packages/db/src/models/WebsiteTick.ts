@@ -33,6 +33,14 @@ const websiteTickSchema = new Schema<IWebsiteTick>(
 // Fast range queries for analytics (per website, by time).
 websiteTickSchema.index({ websiteId: 1, createdAt: -1 });
 
+// Raw ticks are written once a minute per website, so keep them bounded.
+// 90 days comfortably covers the longest analytics range (30d).
+export const TICK_RETENTION_DAYS = 90;
+websiteTickSchema.index(
+  { createdAt: 1 },
+  { expireAfterSeconds: TICK_RETENTION_DAYS * 24 * 60 * 60 }
+);
+
 export const WebsiteTick: Model<IWebsiteTick> =
   (models.WebsiteTick as Model<IWebsiteTick>) ||
   model<IWebsiteTick>("WebsiteTick", websiteTickSchema);
