@@ -12,6 +12,7 @@ import {
   getWebsiteAnalytics,
   getWebsiteIncidents,
 } from "../controllers/analyticsController";
+import { getPageSpeed } from "../controllers/pageSpeedController";
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.delete("/website/:websiteId", disableWebsite);
 router.get("/stats", getDashboardStats);
 router.get("/website/:websiteId/analytics", getWebsiteAnalytics);
 router.get("/website/:websiteId/incidents", getWebsiteIncidents);
+router.get("/website/:websiteId/pagespeed", getPageSpeed);
 
 export default router;
