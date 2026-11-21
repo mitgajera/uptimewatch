@@ -1,118 +1,193 @@
 "use client";
-import React, { useCallback, useEffect, useState } from "react";
-import { Globe, Plus } from "lucide-react";
-import { useWebsites } from "@/hooks/useWebsites";
-import axios from "axios";
-import { useApiClient } from "@/hooks/useApiClient";
-import { WebsiteCard } from "./components/WebsiteCard";
-import { AddWebsiteModal } from "./components/AddWebsiteModal";
-import { StatsBar } from "./components/StatsBar";
-import { DashboardStats } from "./components/types";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Activity, Plus, RotateCw, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useDashboardStats, useMonitors } from "@/hooks/queries";
+import { apiErrorMessage } from "@/lib/api/errors";
+import { displayName, formatLatency, formatUptime, monitorState, type MonitorState } from "@/lib/monitor-format";
+import { cn } from "@/lib/utils";
+import { MonitorRow } from "@/components/monitors/monitor-row";
+import { MonitorFormDialog } from "@/components/monitors/monitor-form-dialog";
 
-export default function DashboardPage() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const { websites, refreshWebsites, error: websitesError } = useWebsites();
-  const api = useApiClient();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+type Filter = "all" | MonitorState;
 
-  const refreshStats = useCallback(async () => {
-    try {
-      const res = await api.get<DashboardStats>("/stats");
-      setStats(res.data);
-    } catch (error) {
-      console.error("Error fetching stats:", error);
+// Down first so problems are seen immediately, then by name.
+const ORDER: Record<MonitorState, number> = { down: 0, pending: 1, up: 2, paused: 3 };
+
+function SummaryCard({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className={cn("mt-1 text-2xl font-semibold tabular-nums", tone)}>{value}</p>
+    </div>
+  );
+}
+
+export default function MonitorsPage() {
+  const router = useRouter();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+
+  const monitors = useMonitors();
+  const stats = useDashboardStats();
+
+  const counts = useMemo(() => {
+    const c: Record<Filter, number> = { all: 0, up: 0, down: 0, paused: 0, pending: 0 };
+    for (const m of monitors.data ?? []) {
+      c.all++;
+      c[monitorState(m)]++;
     }
-  }, [api]);
+    return c;
+  }, [monitors.data]);
 
-  useEffect(() => {
-    refreshStats();
-    const interval = setInterval(refreshStats, 60 * 1000);
-    return () => clearInterval(interval);
-  }, [refreshStats]);
-
-  const handleAddWebsite = async ({ url, name }: { name: string; url: string }) => {
-    try {
-      await api.post("/website", { url, name });
-      setIsModalOpen(false);
-      refreshWebsites();
-      refreshStats();
-    } catch (error) {
-      console.error("Error adding website:", error);
-      alert(
-        axios.isAxiosError(error)
-          ? error.response?.data?.message || "Failed to add website"
-          : "Failed to add website"
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (monitors.data ?? [])
+      .filter((m) => filter === "all" || monitorState(m) === filter)
+      .filter((m) => !q || displayName(m).toLowerCase().includes(q) || m.url.toLowerCase().includes(q))
+      .sort(
+        (a, b) =>
+          ORDER[monitorState(a)] - ORDER[monitorState(b)] || displayName(a).localeCompare(displayName(b))
       );
-    }
-  };
+  }, [monitors.data, query, filter]);
+
+  const filters: { key: Filter; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "down", label: "Down" },
+    { key: "up", label: "Up" },
+    { key: "paused", label: "Paused" },
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-black">
-      <div className="max-w-5xl mx-auto py-8 px-4">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <Globe className="w-8 h-8 text-blue-600" />
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Monitor your websites and APIs in real time
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-black transition"
-          >
-            <Plus className="w-5 h-5" />
-            Add Monitor
-          </button>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Monitors</h1>
+          <p className="text-sm text-muted-foreground">Uptime and response time for your sites and APIs.</p>
         </div>
-
-        <StatsBar stats={stats} loading={!stats} />
-
-        {websitesError && (
-          <div className="mb-4 rounded-md border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-            {websitesError}
-          </div>
-        )}
-
-        {websites.length === 0 ? (
-          <div className="text-center py-20 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-xl">
-            <Globe className="w-12 h-12 text-gray-300 dark:text-zinc-700 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              No monitors yet
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 mb-6">
-              Add your first website or API to start tracking uptime.
-            </p>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
-            >
-              <Plus className="w-5 h-5" />
-              Add your first monitor
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {websites.map((website) => (
-              <WebsiteCard
-                key={website.id}
-                website={website}
-                onDelete={() => {
-                  refreshWebsites();
-                  refreshStats();
-                }}
-              />
-            ))}
-          </div>
-        )}
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus className="size-4" aria-hidden="true" />
+          New monitor
+        </Button>
       </div>
 
-      <AddWebsiteModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onAdd={handleAddWebsite}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {stats.isPending ? (
+          Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[82px]" />)
+        ) : stats.data ? (
+          <>
+            <SummaryCard
+              label="Down now"
+              value={String(stats.data.down)}
+              tone={stats.data.down > 0 ? "text-destructive" : undefined}
+            />
+            <SummaryCard label="Uptime (24h)" value={formatUptime(stats.data.checksLast24h ? stats.data.avgUptime : null)} />
+            <SummaryCard label="Avg response (24h)" value={formatLatency(stats.data.checksLast24h ? stats.data.avgResponseTime : null)} />
+            <SummaryCard
+              label="Open incidents"
+              value={String(stats.data.activeIncidents)}
+              tone={stats.data.activeIncidents > 0 ? "text-warning" : undefined}
+            />
+          </>
+        ) : null}
+      </div>
+
+      {monitors.isPending ? (
+        <div className="divide-y rounded-lg border" aria-busy="true" aria-label="Loading monitors">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-4">
+              <Skeleton className="size-2.5 rounded-full" />
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="ml-auto h-5 w-1/3" />
+            </div>
+          ))}
+        </div>
+      ) : monitors.isError ? (
+        <div className="rounded-lg border border-dashed p-10 text-center">
+          <p className="font-medium">Couldn&apos;t load your monitors</p>
+          <p className="mt-1 text-sm text-muted-foreground">{apiErrorMessage(monitors.error)}</p>
+          <Button className="mt-4" variant="outline" onClick={() => monitors.refetch()}>
+            <RotateCw className="size-4" aria-hidden="true" />
+            Retry
+          </Button>
+        </div>
+      ) : counts.all === 0 ? (
+        <div className="rounded-lg border border-dashed p-12 text-center">
+          <Activity className="mx-auto size-10 text-muted-foreground" aria-hidden="true" />
+          <h2 className="mt-4 font-semibold">Add your first monitor</h2>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+            Paste a URL and we&apos;ll check it every minute, then alert you the moment it goes down.
+          </p>
+          <Button className="mt-6" onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4" aria-hidden="true" />
+            New monitor
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div role="group" aria-label="Filter by status" className="inline-flex w-fit rounded-md border p-0.5">
+              {filters.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  aria-pressed={filter === f.key}
+                  onClick={() => setFilter(f.key)}
+                  className={cn(
+                    "min-h-9 rounded-[5px] px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    filter === f.key ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {f.label}
+                  <span className="ml-1.5 tabular-nums text-muted-foreground">{counts[f.key]}</span>
+                </button>
+              ))}
+            </div>
+            <div className="relative sm:w-64">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input
+                type="search"
+                aria-label="Search monitors"
+                placeholder="Search monitors"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          {visible.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+              No monitors match.{" "}
+              <Button
+                variant="link"
+                className="h-auto p-0"
+                onClick={() => {
+                  setQuery("");
+                  setFilter("all");
+                }}
+              >
+                Clear filters
+              </Button>
+            </div>
+          ) : (
+            <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+              {visible.map((m) => (
+                <MonitorRow key={m.id} monitor={m} />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <MonitorFormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSaved={(id) => router.push(`/dashboard/monitors/${id}`)}
       />
     </div>
   );
