@@ -1,4 +1,5 @@
 import { Schema, model, models, Types, Model } from "mongoose";
+import { CHECK_ERROR_TYPES, type CheckErrorType } from "./WebsiteTick";
 
 export interface IIncident {
   _id: Types.ObjectId;
@@ -9,6 +10,9 @@ export interface IIncident {
   durationMs?: number | null;
   ongoing: boolean;
   lastStatusCode?: number | null;
+  /** Cause of the failure that opened the incident. */
+  errorType?: CheckErrorType | null;
+  errorMessage?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,6 +31,8 @@ const incidentSchema = new Schema<IIncident>(
     durationMs: { type: Number, default: null },
     ongoing: { type: Boolean, default: true, index: true },
     lastStatusCode: { type: Number, default: null },
+    errorType: { type: String, enum: [...CHECK_ERROR_TYPES, null], default: null },
+    errorMessage: { type: String, default: null, maxlength: 500 },
   },
   { timestamps: true }
 );

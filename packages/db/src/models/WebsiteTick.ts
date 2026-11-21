@@ -2,12 +2,36 @@ import { Schema, model, models, Types, Model } from "mongoose";
 
 export type WebsiteStatus = "UP" | "DOWN";
 
+/** Why a check failed. Null for successful checks. */
+export type CheckErrorType =
+  | "DNS"
+  | "TIMEOUT"
+  | "CONNECTION"
+  | "TLS"
+  | "HTTP_STATUS"
+  | "KEYWORD"
+  | "BLOCKED"
+  | "UNKNOWN";
+
+export const CHECK_ERROR_TYPES: CheckErrorType[] = [
+  "DNS",
+  "TIMEOUT",
+  "CONNECTION",
+  "TLS",
+  "HTTP_STATUS",
+  "KEYWORD",
+  "BLOCKED",
+  "UNKNOWN",
+];
+
 export interface IWebsiteTick {
   _id: Types.ObjectId;
   websiteId: Types.ObjectId;
   status: WebsiteStatus;
   latency: number;
   statusCode?: number | null;
+  errorType?: CheckErrorType | null;
+  errorMessage?: string | null;
   region?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -24,6 +48,8 @@ const websiteTickSchema = new Schema<IWebsiteTick>(
     status: { type: String, enum: ["UP", "DOWN"], required: true },
     latency: { type: Number, required: true },
     statusCode: { type: Number, default: null },
+    errorType: { type: String, enum: [...CHECK_ERROR_TYPES, null], default: null },
+    errorMessage: { type: String, default: null, maxlength: 500 },
     // Optional label for the monitor that produced this tick (e.g. a region name).
     region: { type: String, default: "central" },
   },
