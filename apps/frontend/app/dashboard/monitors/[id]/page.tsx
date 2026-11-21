@@ -38,6 +38,7 @@ import { IncidentList } from "@/components/monitors/incident-list";
 import { MonitorFormDialog } from "@/components/monitors/monitor-form-dialog";
 import { DeleteMonitorDialog } from "@/components/monitors/delete-monitor-dialog";
 import { HeartbeatSetup } from "@/components/monitors/heartbeat-setup";
+import { MaintenanceMenu } from "@/components/monitors/maintenance-menu";
 import { PageSpeedInsightsModal } from "@/components/monitors/pagespeed-panel";
 
 const RANGES: AnalyticsRange[] = ["24h", "7d", "30d"];
@@ -183,6 +184,7 @@ export default function MonitorDetailPage({ params }: { params: Promise<{ id: st
               {m.paused ? <Play className="size-4" aria-hidden="true" /> : <Pause className="size-4" aria-hidden="true" />}
               {m.paused ? "Resume" : "Pause"}
             </Button>
+            {!m.paused && <MaintenanceMenu monitor={m} active={state === "maintenance"} />}
             <Button variant="outline" onClick={() => setEditOpen(true)}>
               <Pencil className="size-4" aria-hidden="true" />
               Edit
@@ -204,6 +206,17 @@ export default function MonitorDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       </div>
+
+      {state === "maintenance" && m.maintenanceUntil && (
+        <div role="status" className="rounded-lg border bg-secondary p-4 text-sm">
+          <p className="font-medium">Under maintenance</p>
+          <p className="text-muted-foreground">
+            Checks and alerts resume{" "}
+            <time dateTime={m.maintenanceUntil}>{new Date(m.maintenanceUntil).toLocaleString()}</time>. Status
+            pages show this monitor as under maintenance.
+          </p>
+        </div>
+      )}
 
       {state === "down" && (
         <div role="alert" className="flex gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4">
