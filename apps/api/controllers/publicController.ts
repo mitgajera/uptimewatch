@@ -8,6 +8,7 @@ import {
   STATUS_HISTORY_DAYS,
   type DailyCount,
 } from "../statusPages/summary";
+import { renderStatusBadge } from "../statusPages/badge";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const INCIDENT_HISTORY_DAYS = 14;
@@ -109,26 +110,42 @@ async function buildStatusPage(slug: string, now: number) {
   };
 }
 
-/** GET /public/status-pages/:slug — no auth. */
-export const getPublicStatusPage = async (req: Request, res: Response) => {
-  const slug = String(req.params.slug ?? "").toLowerCase();
-  if (!/^[a-z0-9-]{3,48}$/.test(slug)) {
-    res.status(404).json({ error: "Status page not found." });
-    return;
-  }
+/** Resolve a public status page by slug through the short-lived cache. */
+async function loadStatusPage(rawSlug: unknown) {
+  const slug = String(rawSlug ?? "").toLowerCase();
+  if (!/^[a-z0-9-]{3,48}$/.test(slug)) return null;
 
   const now = Date.now();
   const hit = cache.get(slug);
-  let body = hit && hit.expires > now ? hit.body : undefined;
-  if (body === undefined) {
-    body = await buildStatusPage(slug, now);
-    cache.set(slug, { expires: now + CACHE_TTL_MS, body });
-  }
+  if (hit && hit.expires > now) return hit.body as Awaited<ReturnType<typeof buildStatusPage>>;
 
+  const body = await buildStatusPage(slug, now);
+  cache.set(slug, { expires: now + CACHE_TTL_MS, body });
+  return body;
+}
+
+/** GET /public/status-pages/:slug — no auth. */
+export const getPublicStatusPage = async (req: Request, res: Response) => {
+  const body = await loadStatusPage(req.params.slug);
   if (!body) {
     res.status(404).json({ error: "Status page not found." });
     return;
   }
   res.set("Cache-Control", "public, max-age=60");
   res.json(body);
+};
+
+/** GET /public/status-pages/:slug/badge.svg — embeddable status badge. */
+export const getStatusBadge = async (req: Request, res: Response) => {
+  const body = await loadStatusPage(req.params.slug);
+  const label = typeof req.query.label === "string" && req.query.label ? req.query.label : "status";
+
+  res.status(body ? 200 : 404);
+  res.set({
+    "Content-Type": "image/svg+xml; charset=utf-8",
+    "Cache-Control": "public, max-age=60",
+    // Badges are meant to be embedded on other sites (READMEs, footers).
+    "Cross-Origin-Resource-Policy": "cross-origin",
+  });
+  res.send(renderStatusBadge(body?.status ?? "unknown", label));
 };

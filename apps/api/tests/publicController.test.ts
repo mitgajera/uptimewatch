@@ -13,15 +13,22 @@ const WebsiteTick = { aggregate: mock(async (..._a: any[]) => [] as any[]) };
 const Incident = { find: mock((..._a: any[]) => query<any[]>([])) };
 mockDb({ StatusPage, Website, WebsiteTick, Incident });
 
-const { getPublicStatusPage, clearPublicCache } = await import("../controllers/publicController");
+const { getPublicStatusPage, getStatusBadge, clearPublicCache } = await import(
+  "../controllers/publicController"
+);
 
 function mockRes() {
   const res: any = {
     statusCode: 200,
     body: undefined,
     headers: {} as Record<string, string>,
-    set(k: string, v: string) {
-      res.headers[k] = v;
+    set(k: string | Record<string, string>, v?: string) {
+      if (typeof k === "string") res.headers[k] = v!;
+      else Object.assign(res.headers, k);
+      return res;
+    },
+    send(payload: unknown) {
+      res.body = payload;
       return res;
     },
     status(code: number) {
@@ -93,5 +100,25 @@ describe("getPublicStatusPage", () => {
     await getPublicStatusPage(req("acme"), mockRes());
     await getPublicStatusPage(req("acme"), mockRes());
     expect(StatusPage.findOne).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("getStatusBadge", () => {
+  test("renders the page status as an embeddable SVG", async () => {
+    StatusPage.findOne.mockReturnValue(query({ title: "Acme", websiteIds: [] }));
+    const res = mockRes();
+    await getStatusBadge({ params: { slug: "acme" }, query: { label: "acme" } } as any, res);
+    expect(res.statusCode).toBe(200);
+    expect((res as any).headers["Content-Type"]).toContain("image/svg+xml");
+    expect((res as any).headers["Cross-Origin-Resource-Policy"]).toBe("cross-origin");
+    expect(res.body).toContain(">acme</text>");
+    expect(res.body).toContain(">unknown</text>");
+  });
+
+  test("404s with an unknown badge for missing pages", async () => {
+    const res = mockRes();
+    await getStatusBadge({ params: { slug: "nope" }, query: {} } as any, res);
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toContain("<svg");
   });
 });
