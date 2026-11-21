@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import {ClerkProvider} from '@clerk/nextjs'
+import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Header } from "@/components/layout/header";
+import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,8 +17,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "UptimeWatch",
-  description: "UptimeWatch is an uptime and API monitoring platform. Add your websites and APIs, get checked every minute, and view real-time uptime, response time, and instant downtime email alerts.",
+  title: {
+    default: "UptimeWatch — uptime & API monitoring",
+    template: "%s · UptimeWatch",
+  },
+  description:
+    "Monitor websites and APIs every minute. Get alerted by email, Slack, Discord or webhook when something breaks, track SSL expiry, and share a public status page.",
 };
 
 export default function RootLayout({
@@ -26,17 +31,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <ClerkProvider>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <body
-            className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-            >
-              <Header />
+    <ClerkProvider>
+      {/* next-themes sets the theme class on <html> before hydration. */}
+      <html lang="en" suppressHydrationWarning>
+        <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+            <Header />
             {children}
-          </body>
-        </ThemeProvider>
-      </ClerkProvider>
-    </html>
+            <Toaster richColors closeButton />
+          </ThemeProvider>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
