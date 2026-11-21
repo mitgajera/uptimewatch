@@ -29,11 +29,24 @@ async function checkWebsite(website: any) {
   });
 
   const label = website.name || website.url;
-  const event = evaluateTransition(website, result);
+  const { event, consecutiveFailures, isDown } = evaluateTransition(website, result);
+
+  await Website.updateOne(
+    { _id: website._id },
+    {
+      $set: {
+        isDown,
+        consecutiveFailures,
+        lastCheckedAt: new Date(),
+        lastStatusCode: statusCode,
+        lastLatency: latency,
+        lastErrorType: errorType,
+      },
+    }
+  );
 
   if (event === "WENT_DOWN") {
     log("Website is down (new incident)", { url: website.url, websiteId: website._id });
-    await Website.updateOne({ _id: website._id }, { $set: { isDown: true } });
     await Incident.create({
       websiteId: website._id,
       userId: website.userId,
@@ -51,7 +64,6 @@ async function checkWebsite(website: any) {
 
   else if (event === "RECOVERED") {
     log("Website recovered", { url: website.url, websiteId: website._id });
-    await Website.updateOne({ _id: website._id }, { $set: { isDown: false } });
 
     const openIncident = await Incident.findOne({
       websiteId: website._id,
