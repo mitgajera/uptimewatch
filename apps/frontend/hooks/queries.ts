@@ -80,7 +80,7 @@ export function useCreateMonitor() {
   const api = useApiClient();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: Partial<MonitorConfig> & { url: string }) =>
+    mutationFn: async (input: Partial<MonitorConfig>) =>
       (await api.post<{ id: string }>("/website", input)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.monitors });

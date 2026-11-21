@@ -25,11 +25,18 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useCreateMonitor, useUpdateMonitor } from "@/hooks/queries";
 import { apiErrorMessage } from "@/lib/api/errors";
-import { MONITOR_INTERVALS, type Monitor, type MonitorConfig, type MonitorMethod } from "@/lib/api/types";
+import {
+  MONITOR_INTERVALS,
+  type Monitor,
+  type MonitorConfig,
+  type MonitorMethod,
+  type MonitorType,
+} from "@/lib/api/types";
 import { formatInterval } from "@/lib/monitor-format";
 import { cn } from "@/lib/utils";
 
 type FormState = {
+  type: MonitorType;
   name: string;
   url: string;
   method: MonitorMethod;
@@ -39,12 +46,14 @@ type FormState = {
   keyword: string;
   followRedirects: boolean;
   failureThreshold: string;
+  graceMinutes: string;
 };
 
 type Field = keyof FormState;
 type Errors = Partial<Record<Field, string>>;
 
 const DEFAULTS: FormState = {
+  type: "http",
   name: "",
   url: "",
   method: "GET",
@@ -54,10 +63,12 @@ const DEFAULTS: FormState = {
   keyword: "",
   followRedirects: true,
   failureThreshold: "2",
+  graceMinutes: "5",
 };
 
 function fromMonitor(m: Monitor): FormState {
   return {
+    type: m.type ?? "http",
     name: m.name ?? "",
     url: m.url,
     method: m.method,
@@ -67,6 +78,7 @@ function fromMonitor(m: Monitor): FormState {
     keyword: m.keyword ?? "",
     followRedirects: m.followRedirects,
     failureThreshold: String(m.failureThreshold),
+    graceMinutes: String(Math.round((m.graceSeconds ?? 300) / 60)),
   };
 }
 
@@ -81,10 +93,19 @@ const SERVER_FIELD: Record<string, Field> = {
   keyword: "keyword",
   followRedirects: "followRedirects",
   failureThreshold: "failureThreshold",
+  graceSeconds: "graceMinutes",
 };
 
 function validate(f: FormState): Errors {
   const errors: Errors = {};
+  if (f.type === "heartbeat") {
+    const grace = Number(f.graceMinutes);
+    if (!Number.isInteger(grace) || grace < 0 || grace > 1440) {
+      errors.graceMinutes = "Use a whole number of minutes from 0 to 1440";
+    }
+    if (!f.name.trim()) errors.name = "Name your heartbeat, e.g. Nightly backup";
+    return errors;
+  }
   try {
     const u = new URL(f.url.trim());
     if (!/^https?:$/.test(u.protocol)) errors.url = "URL must start with http:// or https://";
@@ -105,8 +126,17 @@ function validate(f: FormState): Errors {
   return errors;
 }
 
-function toPayload(f: FormState): Partial<MonitorConfig> & { url: string } {
+function toPayload(f: FormState): Partial<MonitorConfig> {
+  if (f.type === "heartbeat") {
+    return {
+      type: "heartbeat",
+      name: f.name.trim(),
+      intervalSeconds: Number(f.intervalSeconds),
+      graceSeconds: Number(f.graceMinutes) * 60,
+    };
+  }
   return {
+    type: "http",
     name: f.name.trim(),
     url: f.url.trim(),
     method: f.method,
@@ -157,7 +187,7 @@ export function MonitorFormDialog({ open, onOpenChange, monitor, onSaved }: Moni
   const focusFirstError = (errs: Errors) => {
     const first = (Object.keys(errs) as Field[]).find((k) => errs[k]);
     if (!first) return;
-    if (first !== "name" && first !== "url") setAdvancedOpen(true);
+    if (!["name", "url", "graceMinutes"].includes(first)) setAdvancedOpen(true);
     // Wait for the collapsible to render before focusing.
     requestAnimationFrame(() =>
       formRef.current?.querySelector<HTMLElement>(`[name="${first}"]`)?.focus()
@@ -177,7 +207,8 @@ export function MonitorFormDialog({ open, onOpenChange, monitor, onSaved }: Moni
     try {
       const payload = toPayload(form);
       if (monitor) {
-        await update.mutateAsync(payload);
+        // The monitor type is fixed after creation.
+        await update.mutateAsync({ ...payload, type: undefined });
         toast.success("Monitor updated");
         onSaved?.(monitor.id);
       } else {
@@ -241,7 +272,7 @@ export function MonitorFormDialog({ open, onOpenChange, monitor, onSaved }: Moni
           <DialogDescription>
             {isEdit
               ? "Changes apply from the next check."
-              : "We'll check this URL on a schedule and alert you when it fails."}
+              : "We'll alert you as soon as it stops responding."}
           </DialogDescription>
         </DialogHeader>
 
@@ -252,6 +283,49 @@ export function MonitorFormDialog({ open, onOpenChange, monitor, onSaved }: Moni
             </p>
           )}
 
+          {!isEdit && (
+            <fieldset className="grid gap-1.5">
+              <legend className="mb-1.5 text-sm font-medium">Type</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    ["http", "Website / API", "We request your URL"],
+                    ["heartbeat", "Heartbeat", "Your cron job pings us"],
+                  ] as const
+                ).map(([value, label, hint]) => (
+                  <label
+                    key={value}
+                    className={cn(
+                      "flex cursor-pointer flex-col rounded-md border p-3 text-sm transition-colors focus-within:ring-2 focus-within:ring-ring",
+                      form.type === value ? "border-foreground bg-secondary" : "hover:bg-secondary/50"
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="type"
+                      value={value}
+                      checked={form.type === value}
+                      onChange={() => {
+                        setErrors({});
+                        setForm((f) => ({
+                          ...f,
+                          type: value,
+                          // Jobs usually run hourly or daily, not every minute.
+                          intervalSeconds:
+                            value === "heartbeat" && Number(f.intervalSeconds) < 300 ? "3600" : f.intervalSeconds,
+                        }));
+                      }}
+                      className="sr-only"
+                    />
+                    <span className="font-medium">{label}</span>
+                    <span className="text-xs text-muted-foreground">{hint}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
+          {form.type === "http" && (
           <div className="grid gap-1.5">
             <Label htmlFor={`${id}-url`}>URL</Label>
             <Input
@@ -269,15 +343,17 @@ export function MonitorFormDialog({ open, onOpenChange, monitor, onSaved }: Moni
             <FieldError field="url" />
             <Hint field="url">Public http(s) address. Private and internal addresses are blocked.</Hint>
           </div>
+          )}
 
           <div className="grid gap-1.5">
             <Label htmlFor={`${id}-name`}>
-              Name <span className="font-normal text-muted-foreground">(optional)</span>
+              Name{" "}
+              {form.type === "http" && <span className="font-normal text-muted-foreground">(optional)</span>}
             </Label>
             <Input
               {...fieldProps("name")}
               autoComplete="off"
-              placeholder="Marketing site"
+              placeholder={form.type === "heartbeat" ? "Nightly backup" : "Marketing site"}
               maxLength={100}
               value={form.name}
               onChange={(e) => set("name", e.target.value)}
@@ -286,7 +362,9 @@ export function MonitorFormDialog({ open, onOpenChange, monitor, onSaved }: Moni
           </div>
 
           <div className="grid gap-1.5">
-            <Label htmlFor={`${id}-intervalSeconds`}>Check every</Label>
+            <Label htmlFor={`${id}-intervalSeconds`}>
+              {form.type === "heartbeat" ? "Expect a ping every" : "Check every"}
+            </Label>
             <Select value={form.intervalSeconds} onValueChange={(v) => set("intervalSeconds", v)}>
               <SelectTrigger id={`${id}-intervalSeconds`} name="intervalSeconds" className="w-full">
                 <SelectValue />
@@ -301,6 +379,23 @@ export function MonitorFormDialog({ open, onOpenChange, monitor, onSaved }: Moni
             </Select>
           </div>
 
+          {form.type === "heartbeat" && (
+            <div className="grid gap-1.5">
+              <Label htmlFor={`${id}-graceMinutes`}>Grace period (minutes)</Label>
+              <Input
+                {...fieldProps("graceMinutes")}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={form.graceMinutes}
+                onChange={(e) => set("graceMinutes", e.target.value)}
+              />
+              <FieldError field="graceMinutes" />
+              <Hint field="graceMinutes">How late a ping can be before we alert. Covers jobs that run long.</Hint>
+            </div>
+          )}
+
+          {form.type === "http" && (
           <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
             <CollapsibleTrigger asChild>
               <Button type="button" variant="ghost" className="-ml-3 h-10 text-muted-foreground">
@@ -400,6 +495,7 @@ export function MonitorFormDialog({ open, onOpenChange, monitor, onSaved }: Moni
               </div>
             </CollapsibleContent>
           </Collapsible>
+          )}
 
           <DialogFooter className="gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
