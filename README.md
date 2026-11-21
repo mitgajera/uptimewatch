@@ -112,6 +112,8 @@ CLERK_ISSUER=
 RESEND_API_KEY=
 ```
 
+The API only trusts tokens from `CLERK_ISSUER` (or, if unset, the issuer encoded in `CLERK_PUBLISHABLE_KEY`). With neither set, every request is rejected.
+
 #### Database Package
 
 ```bash

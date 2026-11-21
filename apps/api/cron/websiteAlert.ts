@@ -1,50 +1,72 @@
-import cron from "node-cron";
-import { Notification, User } from "db/client";
-import { sendEmail } from "../lib/email";
+import { AlertChannel, Notification, User } from "db/client";
+import { deliver } from "../notify/channels";
+import { deliverToTargets, MAX_DELIVERY_ATTEMPTS, resolveTargets } from "../notify/dispatch";
 
-export const scheduleWebsiteAlert = () => {
-  cron.schedule("*/2 * * * *", async () => {
-    console.log("[CRON] Checking for unsent notifications...");
+const BATCH_SIZE = 100;
 
-    try {
-      const notifications = await Notification.find({ sent: false })
-        .limit(10)
-        .lean();
+function log(message: string, data: Record<string, unknown> = {}) {
+  console.log(`[${new Date().toISOString()}] [ALERTS] ${message}`, data);
+}
 
-      for (const notif of notifications) {
-        if (!notif.userId) continue;
+let running = false;
 
-        const user = await User.findById(notif.userId).select("email").lean();
-        if (!user?.email) continue;
+/** Deliver pending notifications to each user's alert channels. */
+export async function dispatchPendingNotifications() {
+  if (running) return;
+  running = true;
 
-        try {
-          const result = await sendEmail({
-            to: user.email,
-            subject: "New Notification",
-            text: notif.message,
-          });
+  try {
+    const now = new Date();
+    const notifications = await Notification.find({
+      sent: false,
+      attempts: { $not: { $gte: MAX_DELIVERY_ATTEMPTS } },
+      $or: [{ nextAttemptAt: null }, { nextAttemptAt: { $lte: now } }],
+    })
+      .sort({ createdAt: 1 })
+      .limit(BATCH_SIZE)
+      .lean();
+    if (notifications.length === 0) return;
 
-          if (!result.ok) {
-            console.error(
-              `[CRON] Email not sent for notif ${notif._id}: ${result.error}`
-            );
-            continue;
-          }
+    const userIds = [...new Set(notifications.map((n) => n.userId))];
+    const [users, channels] = await Promise.all([
+      User.find({ _id: { $in: userIds } }).select("email").lean(),
+      // Disabled channels too: they decide whether the account-email fallback applies.
+      AlertChannel.find({ userId: { $in: userIds } }).lean(),
+    ]);
+    const emailByUser = new Map(users.map((u) => [String(u._id), u.email]));
 
-          await Notification.updateOne({ _id: notif._id }, { $set: { sent: true } });
+    for (const notif of notifications) {
+      const targets = resolveTargets(
+        channels
+          .filter((c) => c.userId === notif.userId)
+          .map((c) => ({ type: c.type, target: c.target, enabled: c.enabled })),
+        emailByUser.get(notif.userId)
+      );
 
-          if (result.skipped) {
-            console.log(`[CRON] Email paused; marked notif ${notif._id} as sent`);
-            continue;
-          }
+      const outcome = await deliverToTargets(
+        {
+          kind: notif.kind,
+          subject: notif.subject || "UptimeWatch alert",
+          message: notif.message,
+          websiteId: notif.websiteId ? String(notif.websiteId) : null,
+          createdAt: notif.createdAt,
+        },
+        targets,
+        notif,
+        deliver,
+        now.getTime()
+      );
 
-          console.log(`[CRON] Sent and updated notif ${notif._id}`);
-        } catch (err) {
-          console.error(`[CRON] Failed to send notif ${notif._id}:`, err);
-        }
+      await Notification.updateOne({ _id: notif._id }, { $set: outcome });
+      if (outcome.lastError) {
+        log("Delivery problem", { notificationId: notif._id, error: outcome.lastError });
       }
-    } catch (err) {
-      console.error("[CRON] Error fetching notifications:", err);
     }
-  });
-};
+  } catch (err) {
+    log("Error dispatching notifications", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  } finally {
+    running = false;
+  }
+}

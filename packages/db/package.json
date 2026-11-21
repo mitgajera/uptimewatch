@@ -3,9 +3,11 @@
   "module": "index.ts",
   "type": "module",
   "exports": {
-    "./client": "./src/index.ts"
+    "./client": "./src/index.ts",
+    "./constants": "./src/constants.ts"
   },
   "scripts": {
+    "check-types": "tsc --noEmit -p .",
     "db:seed": "bun run seed.ts",
     "build": "tsc -b"
   },

@@ -29,10 +29,10 @@ export function average(nums: number[]): number {
 }
 
 /**
- * Uptime percentage from up/total check counts, rounded to two decimals.
- * Returns 100 when there are no checks.
+ * Uptime percentage from up/total check counts, floored to two decimals so a
+ * period with any failed check never displays as 100%. Returns 100 when there
+ * are no checks.
  */
 export function uptimePercent(upCount: number, total: number): number {
-  const pct = total ? (upCount / total) * 100 : 100;
-  return Math.round(pct * 100) / 100;
+  return total ? Math.floor((upCount * 10_000) / total) / 100 : 100;
 }

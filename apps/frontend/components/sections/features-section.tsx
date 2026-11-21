@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useRef, useState, useEffect } from "react"
 import { useInView } from "framer-motion"
-import { Activity, BarChart, Bell, Code, Network, Users } from "lucide-react"
+import { Activity, BarChart, Bell, Globe, Lock, ShieldCheck } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 
 interface FeatureCardProps {
@@ -57,35 +57,36 @@ export function FeaturesSection() {
 
   const features = [
     {
-      title: "Real-time Monitoring",
-      description: "Automated checks every minute keep your uptime data accurate and always up to date.",
-      icon: <Activity className="h-6 w-6 text-primary" />,
-    },
-    {
-      title: "Response Time Tracking",
-      description: "Measure how fast each site responds on every check and spot slowdowns before they become outages.",
-      icon: <Network className="h-6 w-6 text-primary" />,
-    },
-    {
-      title: "Detailed Analytics",
-      description: "Comprehensive reports and insights about your website's performance and availability over time.",
-      icon: <BarChart className="h-6 w-6 text-primary" />,
-    },
-    {
-      title: "Instant Email Alerts",
-      description: "Get notified by email the moment a site goes down — and again when it comes back online.",
-      icon: <Bell className="h-6 w-6 text-primary" />,
-    },
-    {
-      title: "Incident History",
-      description: "Every up and down event is recorded so you can review past incidents and track reliability trends.",
-      icon: <Users className="h-6 w-6 text-primary" />,
-    },
-    {
-      title: "PageSpeed Insights",
+      title: "Checks every minute",
       description:
-        "Run on-demand Google Lighthouse reports for any monitored site to track performance and Core Web Vitals.",
-      icon: <Code className="h-6 w-6 text-primary" />,
+        "HTTP checks from every minute to once a day, with custom methods, expected status codes, timeouts and keyword matching.",
+      icon: <Activity className="h-6 w-6 text-primary" aria-hidden="true" />,
+    },
+    {
+      title: "No false alarms",
+      description:
+        "Alerts fire only after consecutive failures, and every incident says why: DNS, timeout, TLS, status code or missing keyword.",
+      icon: <ShieldCheck className="h-6 w-6 text-primary" aria-hidden="true" />,
+    },
+    {
+      title: "Alerts where you work",
+      description: "Email, Slack, Discord or any webhook, the moment something breaks and again when it recovers.",
+      icon: <Bell className="h-6 w-6 text-primary" aria-hidden="true" />,
+    },
+    {
+      title: "Public status pages",
+      description: "Share a live status page with 90 days of uptime history so users know what's happening.",
+      icon: <Globe className="h-6 w-6 text-primary" aria-hidden="true" />,
+    },
+    {
+      title: "SSL expiry warnings",
+      description: "Get warned 30, 14, 7 and 1 day before a certificate expires, before browsers start blocking visitors.",
+      icon: <Lock className="h-6 w-6 text-primary" aria-hidden="true" />,
+    },
+    {
+      title: "Response time analytics",
+      description: "Average, p95 and p99 latency over 24 hours, 7 days or 30 days, plus on-demand PageSpeed reports.",
+      icon: <BarChart className="h-6 w-6 text-primary" aria-hidden="true" />,
     },
   ]
 

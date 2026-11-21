@@ -1,0 +1,69 @@
+import { uptimePercent } from "../utils/stats";
+export const STATUS_HISTORY_DAYS = 90;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface DailyCount {
+  day: string; // YYYY-MM-DD (UTC)
+  total: number;
+  up: number;
+}
+
+export interface DailyBar {
+  date: string;
+  /** Percentage 0-100 with two decimals, or null when there were no checks. */
+  uptime: number | null;
+}
+
+const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/** One bar per UTC day for the last `days` days (oldest first). */
+export function buildDailyBars(rows: DailyCount[], now: number, days = STATUS_HISTORY_DAYS): DailyBar[] {
+  const byDay = new Map(rows.map((r) => [r.day, r]));
+  const bars: DailyBar[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const date = isoDay(now - i * DAY_MS);
+    const row = byDay.get(date);
+    bars.push({
+      date,
+      uptime: row && row.total > 0 ? uptimePercent(row.up, row.total) : null,
+    });
+  }
+  return bars;
+}
+
+/** Overall uptime across bars, weighting each day by its check count. */
+export function overallUptime(rows: DailyCount[]): number | null {
+  const total = rows.reduce((n, r) => n + r.total, 0);
+  if (total === 0) return null;
+  return uptimePercent(rows.reduce((n, r) => n + r.up, 0), total);
+}
+
+export type MonitorPublicStatus = "up" | "down" | "maintenance" | "paused" | "unknown";
+export type PageStatus = "operational" | "maintenance" | "partial_outage" | "major_outage" | "unknown";
+
+export function monitorPublicStatus(
+  m: {
+    paused?: boolean;
+    isDown?: boolean;
+    lastCheckedAt?: Date | string | null;
+    maintenanceUntil?: Date | string | null;
+  },
+  now = Date.now()
+): MonitorPublicStatus {
+  if (m.paused) return "paused";
+  if (m.maintenanceUntil && new Date(m.maintenanceUntil).getTime() > now) return "maintenance";
+  if (m.isDown) return "down";
+  return m.lastCheckedAt ? "up" : "unknown";
+}
+
+export function pageStatus(statuses: MonitorPublicStatus[]): PageStatus {
+  const maintenance = statuses.includes("maintenance");
+  const active = statuses.filter((s) => s !== "paused" && s !== "maintenance");
+  const down = active.filter((s) => s === "down").length;
+  if (down > 0) return down === active.length ? "major_outage" : "partial_outage";
+  // Outages outrank maintenance; maintenance outranks "all good".
+  if (maintenance) return "maintenance";
+  if (active.length === 0 || active.every((s) => s === "unknown")) return "unknown";
+  return "operational";
+}

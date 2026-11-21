@@ -2,12 +2,18 @@ import mongoose from "mongoose";
 
 export { User } from "./models/User";
 export type { IUser } from "./models/User";
-export { Website } from "./models/Website";
-export type { IWebsite } from "./models/Website";
-export { WebsiteTick } from "./models/WebsiteTick";
-export type { IWebsiteTick, WebsiteStatus } from "./models/WebsiteTick";
+export { Website, MONITOR_DEFAULTS, MONITOR_INTERVALS } from "./models/Website";
+export type { IWebsite, MonitorMethod, MonitorType } from "./models/Website";
+export { WebsiteTick, TICK_RETENTION_DAYS, CHECK_ERROR_TYPES } from "./models/WebsiteTick";
+export type { IWebsiteTick, WebsiteStatus, CheckErrorType } from "./models/WebsiteTick";
 export { Notification } from "./models/Notification";
-export type { INotification } from "./models/Notification";
+export type { INotification, NotificationKind } from "./models/Notification";
+export { AlertChannel } from "./models/AlertChannel";
+export type { IAlertChannel, AlertChannelType } from "./models/AlertChannel";
+export { StatusPage } from "./models/StatusPage";
+export type { IStatusPage } from "./models/StatusPage";
+export { Lease } from "./models/Lease";
+export type { ILease } from "./models/Lease";
 export { Incident } from "./models/Incident";
 export type { IIncident } from "./models/Incident";
 

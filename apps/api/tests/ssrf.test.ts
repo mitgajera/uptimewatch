@@ -11,7 +11,7 @@ mock.module("node:dns/promises", () => ({
   lookup: lookupMock,
 }));
 
-const { assertSafeUrl, UnsafeUrlError } = await import("../utils/ssrf");
+const { assertSafeUrl, pinSafeUrl, safeLookup, UnsafeUrlError } = await import("../utils/ssrf");
 
 afterEach(() => {
   lookupMock.mockReset();
@@ -132,5 +132,48 @@ describe("assertSafeUrl — hostname resolution", () => {
     await expect(assertSafeUrl("https://nx.example/")).rejects.toThrow(
       "Could not resolve host"
     );
+  });
+});
+
+describe("pinSafeUrl", () => {
+  test("pins plain http to the vetted address and keeps the Host", async () => {
+    lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }] as any);
+    expect(await pinSafeUrl("http://example.com:8080/a?b=1")).toEqual({
+      url: "http://93.184.216.34:8080/a?b=1",
+      headers: { Host: "example.com:8080" },
+    });
+  });
+
+  test("brackets pinned IPv6 addresses", async () => {
+    lookupMock.mockResolvedValue([{ address: "2606:2800:220:1::1", family: 6 }] as any);
+    expect((await pinSafeUrl("http://example.com/")).url).toBe("http://[2606:2800:220:1::1]/");
+  });
+
+  test("leaves https alone: certificate verification pins the identity", async () => {
+    expect(await pinSafeUrl("https://example.com/x")).toEqual({ url: "https://example.com/x", headers: {} });
+  });
+
+  test("rejects hosts that resolve privately", async () => {
+    lookupMock.mockResolvedValue([{ address: "10.0.0.5", family: 4 }] as any);
+    await expect(pinSafeUrl("http://rebind.example/")).rejects.toBeInstanceOf(UnsafeUrlError);
+  });
+});
+
+describe("safeLookup", () => {
+  const run = (host: string, opts: any = {}) =>
+    new Promise<{ err: Error | null; address: any; family?: number }>((resolve) =>
+      safeLookup(host, opts, (err, address, family) => resolve({ err, address, family }))
+    );
+
+  test("hands the socket the vetted address", async () => {
+    lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }] as any);
+    expect(await run("example.com")).toEqual({ err: null, address: "93.184.216.34", family: 4 });
+    expect((await run("example.com", { all: true })).address).toEqual([{ address: "93.184.216.34", family: 4 }]);
+  });
+
+  test("fails the connection when the host rebinds to a private address", async () => {
+    lookupMock.mockResolvedValue([{ address: "169.254.169.254", family: 4 }] as any);
+    expect((await run("rebind.example")).err).toBeInstanceOf(UnsafeUrlError);
+    expect((await run("127.0.0.1")).err).toBeInstanceOf(UnsafeUrlError);
   });
 });
