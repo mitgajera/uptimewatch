@@ -16,9 +16,12 @@ export function useApiClient() {
 
   const request = useCallback(
     async <T = unknown>(config: AxiosRequestConfig): Promise<AxiosResponse<T>> => {
-      const token = await getToken(
+      let token = await getToken(
         CLERK_JWT_TEMPLATE ? { template: CLERK_JWT_TEMPLATE } : undefined
       );
+      if (!token && CLERK_JWT_TEMPLATE) {
+        token = await getToken();
+      }
       if (!token) {
         throw new Error("No auth token available");
       }
