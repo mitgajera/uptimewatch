@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { downAlert, formatDuration, recoveryAlert } from "../monitor/messages";
+import { downAlert, formatDuration, recoveryAlert, sslExpiryAlert } from "../monitor/messages";
 
 describe("alert messages", () => {
   test("down alerts name the monitor and explain the cause", () => {
@@ -31,5 +31,21 @@ describe("alert messages", () => {
     expect(formatDuration(42_000)).toBe("42s");
     expect(formatDuration(3_600_000 + 60_000)).toBe("1h 1m");
     expect(formatDuration(26 * 3_600_000)).toBe("1d 2h");
+  });
+});
+
+describe("sslExpiryAlert", () => {
+  const cert = { validTo: new Date("2030-01-01T00:00:00Z"), issuer: "Let's Encrypt" };
+
+  test("describes days remaining and the issuer", () => {
+    const alert = sslExpiryAlert({ name: "Site", url: "https://site.dev" }, cert, 7);
+    expect(alert.subject).toContain("expires in 7 day(s)");
+    expect(alert.message).toContain("Issuer: Let's Encrypt");
+  });
+
+  test("handles already-expired certificates", () => {
+    expect(sslExpiryAlert({ url: "https://site.dev" }, cert, -3).subject).toContain(
+      "expired 3 day(s) ago"
+    );
   });
 });

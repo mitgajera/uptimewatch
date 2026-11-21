@@ -7,6 +7,7 @@ import userRoutes from "./routes/userRoutes";
 import alertChannelRoutes from "./routes/alertChannelRoutes";
 import { scheduleMonitor } from "./cron/monitor";
 import { scheduleWebsiteAlert } from "./cron/websiteAlert";
+import { scheduleSslCheck } from "./cron/sslCheck";
 
 const app = express();
 // Cap request body size to mitigate memory-exhaustion DoS via large payloads.
@@ -56,6 +57,7 @@ async function start() {
   console.log("starting cron jobs");
   scheduleMonitor();
   scheduleWebsiteAlert();
+  scheduleSslCheck();
   console.log("started cron jobs");
 
   app.listen(8080, () => {

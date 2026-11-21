@@ -56,6 +56,30 @@ export function downAlert(
   };
 }
 
+export function sslExpiryAlert(
+  monitor: MonitorRef,
+  cert: { validTo: Date; issuer: string | null },
+  daysLeft: number
+): AlertMessage {
+  const label = labelOf(monitor);
+  const when =
+    daysLeft < 0 ? `expired ${-daysLeft} day(s) ago` : daysLeft === 0 ? "expires today" : `expires in ${daysLeft} day(s)`;
+  return {
+    subject: `⚠️ SSL certificate for ${label} ${when}`,
+    message: [
+      `The TLS certificate for ${label} ${when}.`,
+      ``,
+      `URL: ${monitor.url}`,
+      `Expires: ${cert.validTo.toUTCString()}`,
+      cert.issuer ? `Issuer: ${cert.issuer}` : null,
+      ``,
+      `Renew it before it expires to avoid browser security errors.`,
+    ]
+      .filter((line): line is string => line !== null)
+      .join("\n"),
+  };
+}
+
 export function recoveryAlert(monitor: MonitorRef, downtimeMs: number | null): AlertMessage {
   const label = labelOf(monitor);
   return {
