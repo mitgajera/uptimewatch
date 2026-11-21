@@ -23,6 +23,7 @@ const Website = {
 };
 const WebsiteTick = {
   find: mock((_filter: any) => query<any[]>([])),
+  aggregate: mock(async (..._a: any[]) => [] as any[]),
 };
 
 mockDb({ Website, WebsiteTick });
@@ -60,6 +61,7 @@ beforeEach(() => {
     Website.create,
     Website.findOneAndUpdate,
     WebsiteTick.find,
+    WebsiteTick.aggregate,
   ]) {
     m.mockReset();
   }
@@ -68,6 +70,7 @@ beforeEach(() => {
   Website.findOneAndUpdate.mockReturnValue(query(null));
   Website.find.mockReturnValue(query([]));
   WebsiteTick.find.mockReturnValue(query([]));
+  WebsiteTick.aggregate.mockResolvedValue([]);
   Website.updateOne.mockResolvedValue({ matchedCount: 1 });
 });
 
@@ -106,9 +109,25 @@ describe("getAllWebsites", () => {
     expect(since).toBeLessThanOrEqual(Date.now() - RECENT_TICKS_WINDOW_MS + 50);
 
     const [a, b] = res.body.websites;
+    // No 24h aggregate rows -> null stats rather than a misleading 100%.
+    expect(b).toMatchObject({ uptime24h: null, avgLatency24h: null, checks24h: 0 });
     expect(a.id).toBe("a");
     expect(a.websiteTicks.map((t: any) => t.id)).toEqual(["t1", "t3"]);
     expect(b.websiteTicks.map((t: any) => t.id)).toEqual(["t2"]);
+  });
+});
+
+describe("getAllWebsites 24h stats", () => {
+  test("attaches uptime, latency and check counts from the aggregate", async () => {
+    Website.find.mockReturnValue(query([{ _id: "a", url: "https://a.dev" }]));
+    WebsiteTick.aggregate.mockResolvedValue([{ _id: "a", total: 8, up: 7, avgLatency: 123.4 }]);
+    const res = mockRes();
+    await getAllWebsites(mockReq(), res);
+    expect(res.body.websites[0]).toMatchObject({
+      uptime24h: 87.5,
+      avgLatency24h: 123,
+      checks24h: 8,
+    });
   });
 });
 

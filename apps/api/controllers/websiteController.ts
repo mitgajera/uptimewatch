@@ -3,6 +3,9 @@ import { Website, WebsiteTick } from "db/client";
 import { findUserWebsiteOr404, isValidId } from "../utils/websites";
 import { assertSafeUrl, UnsafeUrlError } from "../utils/ssrf";
 import { MONITOR_DEFAULTS } from "db/constants";
+import { uptimePercent } from "../utils/stats";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 import { createMonitorSchema, parseBody, updateMonitorSchema } from "../validation";
 
 // Map a lean Mongo document's `_id` to `id` (recursively for ticks) so the
@@ -161,10 +164,37 @@ export const getAllWebsites = async (req: Request, res: Response) => {
     else ticksByWebsite.set(key, [tick]);
   }
 
+  // 24h uptime and mean latency per monitor, computed in the database.
+  const daily = websites.length
+    ? await WebsiteTick.aggregate<{ _id: unknown; total: number; up: number; avgLatency: number }>([
+        {
+          $match: {
+            websiteId: { $in: websites.map((w) => w._id) },
+            createdAt: { $gte: new Date(Date.now() - DAY_MS) },
+          },
+        },
+        {
+          $group: {
+            _id: "$websiteId",
+            total: { $sum: 1 },
+            up: { $sum: { $cond: [{ $eq: ["$status", "UP"] }, 1, 0] } },
+            avgLatency: { $avg: "$latency" },
+          },
+        },
+      ])
+    : [];
+  const dailyByWebsite = new Map(daily.map((d) => [String(d._id), d]));
+
   res.json({
-    websites: websites.map((website) =>
-      serializeWebsite(website, ticksByWebsite.get(String(website._id)) ?? [])
-    ),
+    websites: websites.map((website) => {
+      const d = dailyByWebsite.get(String(website._id));
+      return {
+        ...serializeWebsite(website, ticksByWebsite.get(String(website._id)) ?? []),
+        uptime24h: d ? uptimePercent(d.up, d.total) : null,
+        avgLatency24h: d ? Math.round(d.avgLatency) : null,
+        checks24h: d?.total ?? 0,
+      };
+    }),
   });
 };
 
