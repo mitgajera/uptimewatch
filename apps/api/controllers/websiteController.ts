@@ -80,8 +80,21 @@ export const updateWebsite = async (req: Request, res: Response) => {
   if (!body) return;
   if (body.url !== undefined && !(await ensureSafeUrl(body.url, res))) return;
 
-  const update: Record<string, unknown> = { ...body };
-  if (body.url !== undefined) {
+  const { maintenanceMinutes, ...fields } = body;
+  const update: Record<string, unknown> = { ...fields };
+  // Windows are timed on the server so a skewed browser clock can't shorten them.
+  if (maintenanceMinutes !== undefined) {
+    update.maintenanceUntil = new Date(Date.now() + maintenanceMinutes * 60_000);
+  }
+  // Ending a window "now" (rather than clearing it) restarts heartbeat
+  // deadlines from now, so a job paused for maintenance isn't instantly late.
+  if (fields.maintenanceUntil === null) update.maintenanceUntil = new Date();
+
+  // The edit form always re-sends the URL; only a real change resets state.
+  const urlChanged =
+    body.url !== undefined &&
+    (await Website.findOne({ _id: websiteId, userId, disabled: false }).select("url").lean())?.url !== body.url;
+  if (urlChanged) {
     // A new target invalidates the failure streak and certificate data.
     Object.assign(update, {
       consecutiveFailures: 0,

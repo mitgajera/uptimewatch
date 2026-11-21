@@ -251,6 +251,7 @@ describe("updateWebsite", () => {
   });
 
   test("resets failure and certificate state when the URL changes", async () => {
+    Website.findOne.mockReturnValue(query({ _id: ID, url: "https://8.8.8.8/old" }));
     Website.findOneAndUpdate.mockReturnValue(query({ _id: ID, url: PUBLIC_URL }));
     await updateWebsite(
       mockReq({ params: { websiteId: ID } as any, body: { url: PUBLIC_URL } }),
@@ -261,6 +262,30 @@ describe("updateWebsite", () => {
       consecutiveFailures: 0,
       sslExpiresAt: null,
     });
+  });
+
+  test("keeps state when the form re-sends the unchanged URL", async () => {
+    Website.findOne.mockReturnValue(query({ _id: ID, url: PUBLIC_URL }));
+    Website.findOneAndUpdate.mockReturnValue(query({ _id: ID, url: PUBLIC_URL }));
+    await updateWebsite(
+      mockReq({ params: { websiteId: ID } as any, body: { url: PUBLIC_URL, name: "API" } }),
+      mockRes()
+    );
+    expect(Website.findOneAndUpdate.mock.calls[0]![1]).toEqual({ $set: { url: PUBLIC_URL, name: "API" } });
+  });
+
+  test("times maintenance windows on the server and ends them at now", async () => {
+    Website.findOneAndUpdate.mockReturnValue(query({ _id: ID, url: PUBLIC_URL }));
+    const before = Date.now();
+    await updateWebsite(mockReq({ params: { websiteId: ID } as any, body: { maintenanceMinutes: 60 } }), mockRes());
+    const until = Website.findOneAndUpdate.mock.calls[0]![1].$set.maintenanceUntil as Date;
+    expect(until.getTime() - before).toBeGreaterThanOrEqual(60 * 60_000);
+    expect(until.getTime() - before).toBeLessThan(60 * 60_000 + 5_000);
+
+    await updateWebsite(mockReq({ params: { websiteId: ID } as any, body: { maintenanceUntil: null } }), mockRes());
+    const ended = Website.findOneAndUpdate.mock.calls[1]![1].$set.maintenanceUntil as Date;
+    expect(ended).toBeInstanceOf(Date);
+    expect(Math.abs(ended.getTime() - Date.now())).toBeLessThan(5_000);
   });
 
   test("404s for monitors the user does not own", async () => {

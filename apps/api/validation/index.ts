@@ -48,6 +48,8 @@ export const updateMonitorSchema = z
         message: "Maintenance windows can last at most 7 days",
       })
       .nullable(),
+    /** Start a window of this many minutes, timed by the server's clock. */
+    maintenanceMinutes: z.number().int().min(1).max(MAX_MAINTENANCE_MS / 60_000),
   })
   .partial()
   .strict();
