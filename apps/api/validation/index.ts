@@ -35,7 +35,22 @@ export const createMonitorSchema = z
     message: "URL is required",
   });
 
-export const updateMonitorSchema = z.object(monitorFields).partial().strict();
+const MAX_MAINTENANCE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const updateMonitorSchema = z
+  .object({
+    ...monitorFields,
+    /** ISO time a maintenance window ends, or null to end it now. */
+    maintenanceUntil: z
+      .string()
+      .datetime({ offset: true })
+      .refine((v) => new Date(v).getTime() - Date.now() <= MAX_MAINTENANCE_MS, {
+        message: "Maintenance windows can last at most 7 days",
+      })
+      .nullable(),
+  })
+  .partial()
+  .strict();
 
 export const createAlertChannelSchema = z
   .object({

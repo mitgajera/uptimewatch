@@ -21,6 +21,15 @@ describe("monitor validation", () => {
     expect(updateMonitorSchema.safeParse({ userId: "someone-else" }).success).toBe(false);
   });
 
+  test("accepts maintenance windows up to 7 days, or null to end one", () => {
+    const inOneHour = new Date(Date.now() + 3600_000).toISOString();
+    const inTenDays = new Date(Date.now() + 10 * 86400_000).toISOString();
+    expect(updateMonitorSchema.safeParse({ maintenanceUntil: inOneHour }).success).toBe(true);
+    expect(updateMonitorSchema.safeParse({ maintenanceUntil: null }).success).toBe(true);
+    expect(updateMonitorSchema.safeParse({ maintenanceUntil: inTenDays }).success).toBe(false);
+    expect(updateMonitorSchema.safeParse({ maintenanceUntil: "tomorrow" }).success).toBe(false);
+  });
+
   test("allows partial updates", () => {
     expect(updateMonitorSchema.safeParse({ paused: true }).success).toBe(true);
   });
