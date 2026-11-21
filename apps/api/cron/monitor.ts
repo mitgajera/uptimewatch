@@ -1,50 +1,21 @@
 import cron from "node-cron";
-import axios from "axios";
 import { Website, WebsiteTick, Notification, Incident } from "db/client";
-import { assertSafeUrl } from "../utils/ssrf";
+import { runHttpCheck } from "../monitor/httpCheck";
+import { evaluateTransition } from "../monitor/transition";
 
 function log(message: string, data: Record<string, any> = {}) {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] [MONITOR] ${message}`, data);
 }
 
-const REQUEST_TIMEOUT_MS = 10_000;
-
 /**
  * Check a single website: measure latency + status, persist a tick, and
  * open/close incidents + fire UP/DOWN notifications when the state changes.
  */
 async function checkWebsite(website: any) {
-  const startTime = Date.now();
-  let status: "UP" | "DOWN" = "DOWN";
-  let latency = REQUEST_TIMEOUT_MS;
-  let statusCode: number | null = null;
-
-  try {
-    // Re-validate at fetch time to guard against a host that now resolves to a
-    // private address (DNS rebinding) or a URL stored before SSRF checks existed.
-    await assertSafeUrl(website.url);
-
-    const response = await axios.get(website.url, {
-      timeout: REQUEST_TIMEOUT_MS,
-      // Treat any non-5xx response as "reachable"; only 5xx / network errors are DOWN.
-      validateStatus: (code) => code < 500,
-      // Do not follow redirects: a public URL could otherwise redirect the
-      // server into a private/internal address, bypassing the SSRF check.
-      maxRedirects: 0,
-      headers: { "User-Agent": "UptimeWatch/1.0 (+https://uptimewatch.app)" },
-    });
-    latency = Date.now() - startTime;
-    statusCode = response.status;
-    status = response.status < 500 ? "UP" : "DOWN";
-  } catch (error: any) {
-    latency = Date.now() - startTime;
-    status = "DOWN";
-    statusCode = error?.response?.status ?? null;
-    log("Website check failed", {
-      url: website.url,
-      error: error instanceof Error ? error.message : String(error),
-    });
+  const { status, latency, statusCode } = await runHttpCheck(website.url);
+  if (status === "DOWN") {
+    log("Website check failed", { url: website.url, statusCode });
   }
 
   await WebsiteTick.create({
@@ -55,9 +26,9 @@ async function checkWebsite(website: any) {
   });
 
   const label = website.name || website.url;
+  const event = evaluateTransition(website, { status, latency, statusCode });
 
-  // State-change: went DOWN
-  if (status === "DOWN" && !website.isDown) {
+  if (event === "WENT_DOWN") {
     log("Website is down (new incident)", { url: website.url, websiteId: website._id });
     await Website.updateOne({ _id: website._id }, { $set: { isDown: true } });
     await Incident.create({
@@ -73,8 +44,7 @@ async function checkWebsite(website: any) {
     });
   }
 
-  // State-change: recovered
-  else if (status === "UP" && website.isDown) {
+  else if (event === "RECOVERED") {
     log("Website recovered", { url: website.url, websiteId: website._id });
     await Website.updateOne({ _id: website._id }, { $set: { isDown: false } });
 
