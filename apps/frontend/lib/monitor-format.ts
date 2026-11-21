@@ -4,13 +4,14 @@ export type MonitorState = "up" | "down" | "maintenance" | "paused" | "pending";
 
 /** Current state of a monitor as shown in the UI. */
 export function monitorState(
-  m: Pick<Monitor, "paused" | "isDown" | "lastCheckedAt" | "websiteTicks" | "maintenanceUntil">,
+  m: Pick<Monitor, "paused" | "isDown" | "lastCheckedAt" | "websiteTicks" | "maintenanceUntil" | "lastHeartbeatAt">,
   now = Date.now()
 ): MonitorState {
   if (m.paused) return "paused";
   if (m.maintenanceUntil && new Date(m.maintenanceUntil).getTime() > now) return "maintenance";
   if (m.isDown) return "down";
-  if (!m.lastCheckedAt && !(m.websiteTicks?.length > 0)) return "pending";
+  // A heartbeat's first ping counts as activity before the scheduler's first tick.
+  if (!m.lastCheckedAt && !m.lastHeartbeatAt && !(m.websiteTicks?.length > 0)) return "pending";
   return "up";
 }
 
