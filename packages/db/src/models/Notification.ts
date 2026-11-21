@@ -10,6 +10,9 @@ export interface INotification {
   subject?: string | null;
   message: string;
   sent: boolean;
+  /** Delivery attempts so far; delivery is abandoned after a few failures. */
+  attempts: number;
+  lastError?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,6 +25,8 @@ const notificationSchema = new Schema<INotification>(
     subject: { type: String, default: null },
     message: { type: String, required: true },
     sent: { type: Boolean, default: false },
+    attempts: { type: Number, default: 0 },
+    lastError: { type: String, default: null, maxlength: 1000 },
   },
   { timestamps: true }
 );
