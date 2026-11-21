@@ -118,7 +118,7 @@ export function WebsiteCard({ website, onDelete }: WebsiteCardProps) {
                 <AreaChart size={28} />
               </button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="h-[98dvh] w-[98vw] max-w-5xl gap-0 p-0 sm:h-[80vh] sm:w-[80vw]">
               <DialogHeader>
                 <DialogTitle className="pt-2 pl-2">PageSpeed Insights</DialogTitle>
               </DialogHeader>
