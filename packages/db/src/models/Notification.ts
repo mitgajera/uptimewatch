@@ -13,6 +13,10 @@ export interface INotification {
   /** Delivery attempts so far; delivery is abandoned after a few failures. */
   attempts: number;
   lastError?: string | null;
+  /** Hashes of the targets that already accepted this alert (never re-sent). */
+  deliveredTo: string[];
+  /** Earliest time of the next delivery attempt (retry backoff). */
+  nextAttemptAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,6 +31,8 @@ const notificationSchema = new Schema<INotification>(
     sent: { type: Boolean, default: false },
     attempts: { type: Number, default: 0 },
     lastError: { type: String, default: null, maxlength: 1000 },
+    deliveredTo: { type: [String], default: [] },
+    nextAttemptAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
