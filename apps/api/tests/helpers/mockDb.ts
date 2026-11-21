@@ -17,6 +17,7 @@ export function mockDb(models: Record<string, unknown>) {
     Notification: {},
     AlertChannel: {},
     Lease: {},
+    StatusPage: {},
     ...models,
   }));
 }

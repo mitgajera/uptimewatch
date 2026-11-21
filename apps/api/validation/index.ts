@@ -50,6 +50,31 @@ export const updateAlertChannelSchema = z
   .partial()
   .strict();
 
+const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid id");
+
+const statusPageFields = {
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(
+      /^[a-z0-9](?:[a-z0-9-]{1,46}[a-z0-9])$/,
+      "3-48 characters: lowercase letters, numbers and dashes"
+    ),
+  title: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(500),
+  websiteIds: z.array(objectId).max(50),
+  published: z.boolean(),
+};
+
+export const createStatusPageSchema = z
+  .object(statusPageFields)
+  .partial()
+  .required({ slug: true, title: true })
+  .strict();
+
+export const updateStatusPageSchema = z.object(statusPageFields).partial().strict();
+
 /**
  * Validate `req.body` against `schema`. On failure responds 400 with the
  * first issue as `message` (for simple UIs) plus every issue, and returns null.
