@@ -16,9 +16,11 @@ export async function dispatchPendingNotifications() {
   running = true;
 
   try {
+    const now = new Date();
     const notifications = await Notification.find({
       sent: false,
       attempts: { $not: { $gte: MAX_DELIVERY_ATTEMPTS } },
+      $or: [{ nextAttemptAt: null }, { nextAttemptAt: { $lte: now } }],
     })
       .sort({ createdAt: 1 })
       .limit(BATCH_SIZE)
@@ -28,7 +30,8 @@ export async function dispatchPendingNotifications() {
     const userIds = [...new Set(notifications.map((n) => n.userId))];
     const [users, channels] = await Promise.all([
       User.find({ _id: { $in: userIds } }).select("email").lean(),
-      AlertChannel.find({ userId: { $in: userIds }, enabled: true }).lean(),
+      // Disabled channels too: they decide whether the account-email fallback applies.
+      AlertChannel.find({ userId: { $in: userIds } }).lean(),
     ]);
     const emailByUser = new Map(users.map((u) => [String(u._id), u.email]));
 
@@ -36,7 +39,7 @@ export async function dispatchPendingNotifications() {
       const targets = resolveTargets(
         channels
           .filter((c) => c.userId === notif.userId)
-          .map((c) => ({ type: c.type, target: c.target })),
+          .map((c) => ({ type: c.type, target: c.target, enabled: c.enabled })),
         emailByUser.get(notif.userId)
       );
 
@@ -49,8 +52,9 @@ export async function dispatchPendingNotifications() {
           createdAt: notif.createdAt,
         },
         targets,
-        notif.attempts ?? 0,
-        deliver
+        notif,
+        deliver,
+        now.getTime()
       );
 
       await Notification.updateOne({ _id: notif._id }, { $set: outcome });
