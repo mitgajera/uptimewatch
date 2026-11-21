@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "check-types": "tsc --noEmit -p .",
     "start": "bun run index.ts",
     "dev": "bun run index.ts",
     "worker": "bun run worker.ts",
