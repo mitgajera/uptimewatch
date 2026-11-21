@@ -68,6 +68,9 @@ export function Header() {
     }
   }, [isLoaded, user, getToken])
 
+  // Public status pages belong to the customer, not our app chrome.
+  if (pathname.startsWith("/status/")) return null
+
   return (
     <header
       className={`sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 transition-all duration-200 ${
