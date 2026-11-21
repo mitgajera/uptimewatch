@@ -1,6 +1,7 @@
 import { Website } from "db/client";
 import { runHttpCheck } from "../monitor/httpCheck";
 import { recordCheckResult } from "../monitor/record";
+import { evaluateHeartbeat } from "../monitor/heartbeat";
 import { isDue, mapSettledWithConcurrency } from "../monitor/schedule";
 
 const CONCURRENCY = Math.max(1, Number(process.env.MONITOR_CONCURRENCY) || 25);
@@ -10,8 +11,13 @@ function log(message: string, data: Record<string, any> = {}) {
   console.log(`[${timestamp}] [MONITOR] ${message}`, data);
 }
 
-/** Run an HTTP check against a website and record the result. */
+/** Check a monitor (fetch its URL, or evaluate its heartbeat) and record the result. */
 async function checkWebsite(website: any) {
+  if (website.type === "heartbeat") {
+    // A missed deadline is already conclusive, so alert on the first miss.
+    await recordCheckResult({ ...website, failureThreshold: 1 }, evaluateHeartbeat(website, Date.now()));
+    return;
+  }
   await recordCheckResult(website, await runHttpCheck(website));
 }
 
