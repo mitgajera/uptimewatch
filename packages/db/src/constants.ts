@@ -39,3 +39,7 @@ export const CHECK_ERROR_TYPES: CheckErrorType[] = [
   "BLOCKED",
   "UNKNOWN",
 ];
+
+export type AlertChannelType = "email" | "slack" | "discord" | "webhook";
+
+export const ALERT_CHANNEL_TYPES: AlertChannelType[] = ["email", "slack", "discord", "webhook"];
