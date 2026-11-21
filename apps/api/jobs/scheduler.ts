@@ -1,0 +1,39 @@
+import cron from "node-cron";
+import { Lease } from "db/client";
+import { acquireLease } from "./lease";
+import { runDueChecks } from "../cron/monitor";
+import { dispatchPendingNotifications } from "../cron/websiteAlert";
+import { runSslChecks } from "../cron/sslCheck";
+
+interface Job {
+  name: string;
+  schedule: string;
+  /** How long a run may hold the job before another instance can take over. */
+  leaseMs: number;
+  run: () => Promise<void>;
+}
+
+const JOBS: Job[] = [
+  { name: "monitor", schedule: "* * * * *", leaseMs: 55_000, run: () => runDueChecks() },
+  { name: "alerts", schedule: "* * * * *", leaseMs: 55_000, run: () => dispatchPendingNotifications() },
+  // Every 15 minutes pick up monitors whose certificate data is stale.
+  { name: "ssl", schedule: "*/15 * * * *", leaseMs: 14 * 60_000, run: () => runSslChecks() },
+];
+
+/**
+ * Start all background jobs. Safe to call from several processes: each run
+ * first takes a per-job lease in Mongo, so only one instance executes it.
+ */
+export function startScheduledJobs() {
+  for (const job of JOBS) {
+    cron.schedule(job.schedule, async () => {
+      try {
+        if (!(await acquireLease(Lease, `job:${job.name}`, job.leaseMs))) return;
+        await job.run();
+      } catch (err) {
+        console.error(`[JOBS] ${job.name} failed:`, err instanceof Error ? err.message : err);
+      }
+    });
+  }
+  console.log(`[JOBS] Scheduled: ${JOBS.map((j) => j.name).join(", ")}`);
+}

@@ -1,18 +1,12 @@
 import { connectDB } from "db/client";
 import { app } from "./app";
-import { scheduleMonitor } from "./cron/monitor";
-import { scheduleWebsiteAlert } from "./cron/websiteAlert";
-import { scheduleSslCheck } from "./cron/sslCheck";
+import { startScheduledJobs } from "./jobs/scheduler";
 
 async function start() {
   await connectDB();
 
   // Start background jobs once the DB is connected.
-  console.log("starting cron jobs");
-  scheduleMonitor();
-  scheduleWebsiteAlert();
-  scheduleSslCheck();
-  console.log("started cron jobs");
+  startScheduledJobs();
 
   const port = Number(process.env.PORT) || 8080;
   app.listen(port, () => {

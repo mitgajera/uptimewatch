@@ -1,4 +1,3 @@
-import cron from "node-cron";
 import { Notification, Website } from "db/client";
 import { assertSafeUrl } from "../utils/ssrf";
 import { daysUntil, fetchCertificate, sslAlertThreshold } from "../monitor/ssl";
@@ -76,8 +75,3 @@ export async function runSslChecks(now = Date.now()) {
     log("Error running SSL checks", { error: err instanceof Error ? err.message : String(err) });
   }
 }
-
-export const scheduleSslCheck = () => {
-  // Every 15 minutes pick up monitors whose certificate data is stale.
-  cron.schedule("*/15 * * * *", () => runSslChecks());
-};

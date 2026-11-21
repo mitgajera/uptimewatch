@@ -1,4 +1,3 @@
-import cron from "node-cron";
 import { Website, WebsiteTick, Notification, Incident } from "db/client";
 import { runHttpCheck } from "../monitor/httpCheck";
 import { evaluateTransition } from "../monitor/transition";
@@ -133,7 +132,3 @@ export async function runDueChecks(now = Date.now()) {
     running = false;
   }
 }
-
-export const scheduleMonitor = () => {
-  cron.schedule("* * * * *", () => runDueChecks());
-};

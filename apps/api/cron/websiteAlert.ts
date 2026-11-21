@@ -1,4 +1,3 @@
-import cron from "node-cron";
 import { AlertChannel, Notification, User } from "db/client";
 import { deliver } from "../notify/channels";
 import { deliverToTargets, MAX_DELIVERY_ATTEMPTS, resolveTargets } from "../notify/dispatch";
@@ -67,7 +66,3 @@ export async function dispatchPendingNotifications() {
     running = false;
   }
 }
-
-export const scheduleWebsiteAlert = () => {
-  cron.schedule("* * * * *", () => dispatchPendingNotifications());
-};
