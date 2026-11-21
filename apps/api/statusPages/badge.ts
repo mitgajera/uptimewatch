@@ -2,6 +2,7 @@ import type { PageStatus } from "./summary";
 
 const STATUS_TEXT: Record<PageStatus, { text: string; color: string }> = {
   operational: { text: "operational", color: "#16a34a" },
+  maintenance: { text: "maintenance", color: "#2563eb" },
   partial_outage: { text: "partial outage", color: "#d97706" },
   major_outage: { text: "major outage", color: "#dc2626" },
   unknown: { text: "unknown", color: "#6b7280" },

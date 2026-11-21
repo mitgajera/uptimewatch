@@ -39,23 +39,31 @@ export function overallUptime(rows: DailyCount[]): number | null {
   return Math.round((up / total) * 10_000) / 100;
 }
 
-export type MonitorPublicStatus = "up" | "down" | "paused" | "unknown";
-export type PageStatus = "operational" | "partial_outage" | "major_outage" | "unknown";
+export type MonitorPublicStatus = "up" | "down" | "maintenance" | "paused" | "unknown";
+export type PageStatus = "operational" | "maintenance" | "partial_outage" | "major_outage" | "unknown";
 
-export function monitorPublicStatus(m: {
-  paused?: boolean;
-  isDown?: boolean;
-  lastCheckedAt?: Date | string | null;
-}): MonitorPublicStatus {
+export function monitorPublicStatus(
+  m: {
+    paused?: boolean;
+    isDown?: boolean;
+    lastCheckedAt?: Date | string | null;
+    maintenanceUntil?: Date | string | null;
+  },
+  now = Date.now()
+): MonitorPublicStatus {
   if (m.paused) return "paused";
+  if (m.maintenanceUntil && new Date(m.maintenanceUntil).getTime() > now) return "maintenance";
   if (m.isDown) return "down";
   return m.lastCheckedAt ? "up" : "unknown";
 }
 
 export function pageStatus(statuses: MonitorPublicStatus[]): PageStatus {
-  const active = statuses.filter((s) => s !== "paused");
-  if (active.length === 0 || active.every((s) => s === "unknown")) return "unknown";
+  const maintenance = statuses.includes("maintenance");
+  const active = statuses.filter((s) => s !== "paused" && s !== "maintenance");
   const down = active.filter((s) => s === "down").length;
-  if (down === 0) return "operational";
-  return down === active.length ? "major_outage" : "partial_outage";
+  if (down > 0) return down === active.length ? "major_outage" : "partial_outage";
+  // Outages outrank maintenance; maintenance outranks "all good".
+  if (maintenance) return "maintenance";
+  if (active.length === 0 || active.every((s) => s === "unknown")) return "unknown";
+  return "operational";
 }

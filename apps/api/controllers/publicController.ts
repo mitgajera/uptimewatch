@@ -35,7 +35,7 @@ async function buildStatusPage(slug: string, now: number) {
   if (!page) return null;
 
   const websites = await Website.find({ _id: { $in: page.websiteIds }, disabled: false })
-    .select("name url paused isDown lastCheckedAt")
+    .select("name url paused isDown lastCheckedAt maintenanceUntil")
     .lean();
   const ids = websites.map((w) => w._id);
 
@@ -85,7 +85,7 @@ async function buildStatusPage(slug: string, now: number) {
       return {
         id: String(w._id),
         name: w.name?.trim() || hostnameOf(w.url),
-        status: monitorPublicStatus(w),
+        status: monitorPublicStatus(w, now),
         uptime: overallUptime(counts),
         days: buildDailyBars(counts, now),
       };

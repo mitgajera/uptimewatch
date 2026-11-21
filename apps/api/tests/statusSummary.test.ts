@@ -44,6 +44,10 @@ describe("statuses", () => {
     expect(monitorPublicStatus({ isDown: true })).toBe("down");
     expect(monitorPublicStatus({ lastCheckedAt: new Date() })).toBe("up");
     expect(monitorPublicStatus({})).toBe("unknown");
+    expect(
+      monitorPublicStatus({ isDown: true, maintenanceUntil: new Date(NOW + 60_000) }, NOW)
+    ).toBe("maintenance");
+    expect(monitorPublicStatus({ maintenanceUntil: new Date(NOW - 1), lastCheckedAt: new Date() }, NOW)).toBe("up");
   });
 
   test("page status", () => {
@@ -52,5 +56,7 @@ describe("statuses", () => {
     expect(pageStatus(["down", "paused"])).toBe("major_outage");
     expect(pageStatus(["paused"])).toBe("unknown");
     expect(pageStatus([])).toBe("unknown");
+    expect(pageStatus(["up", "maintenance"])).toBe("maintenance");
+    expect(pageStatus(["down", "maintenance"])).toBe("major_outage");
   });
 });
