@@ -132,6 +132,8 @@ export const getWebsiteIncidents = async (req: Request, res: Response) => {
       durationMs: i.durationMs,
       ongoing: i.ongoing,
       lastStatusCode: i.lastStatusCode,
+      errorType: i.errorType ?? null,
+      errorMessage: i.errorMessage ?? null,
     })),
   });
 };

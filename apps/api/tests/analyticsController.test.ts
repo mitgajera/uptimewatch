@@ -256,6 +256,8 @@ describe("getWebsiteIncidents", () => {
           durationMs: null,
           ongoing: true,
           lastStatusCode: 503,
+          errorType: "HTTP_STATUS",
+          errorMessage: "Unexpected HTTP 503",
         },
       ])
     );
@@ -268,6 +270,8 @@ describe("getWebsiteIncidents", () => {
       id: "42",
       ongoing: true,
       lastStatusCode: 503,
+      errorType: "HTTP_STATUS",
+      errorMessage: "Unexpected HTTP 503",
     });
   });
 });
