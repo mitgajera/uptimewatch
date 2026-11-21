@@ -2,8 +2,8 @@ import mongoose from "mongoose";
 
 export { User } from "./models/User";
 export type { IUser } from "./models/User";
-export { Website } from "./models/Website";
-export type { IWebsite } from "./models/Website";
+export { Website, MONITOR_DEFAULTS, MONITOR_INTERVALS } from "./models/Website";
+export type { IWebsite, MonitorMethod } from "./models/Website";
 export { WebsiteTick } from "./models/WebsiteTick";
 export type { IWebsiteTick, WebsiteStatus } from "./models/WebsiteTick";
 export { Notification } from "./models/Notification";
