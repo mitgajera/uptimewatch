@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { Website, WebsiteTick } from "db/client";
-import { findUserWebsiteOr404 } from "../utils/websites";
+import { findUserWebsiteOr404, isValidId } from "../utils/websites";
 import { assertSafeUrl, UnsafeUrlError } from "../utils/ssrf";
 
 // Map a lean Mongo document's `_id` to `id` (recursively for ticks) so the
@@ -94,20 +94,20 @@ export const disableWebsite = async (req: Request, res: Response) => {
   const userId = req.userId;
   const websiteId = req.params.websiteId;
 
-  if (!websiteId) {
-    res.status(400).json({ error: "Missing websiteId in URL" });
+  if (!isValidId(websiteId)) {
+    res.status(400).json({ error: "Invalid website id." });
     return;
   }
 
-  try {
-    await Website.updateOne(
-      { _id: websiteId, userId },
-      { $set: { disabled: true } }
-    );
+  const result = await Website.updateOne(
+    { _id: websiteId, userId, disabled: false },
+    { $set: { disabled: true } }
+  );
 
-    res.json({ message: "Website disabled successfully" });
-  } catch (error) {
-    console.error("Failed to disable website:", error);
-    res.status(500).json({ error: "Internal server error" });
+  if (result.matchedCount === 0) {
+    res.status(404).json({ error: "Website not found." });
+    return;
   }
+
+  res.json({ message: "Website disabled successfully" });
 };

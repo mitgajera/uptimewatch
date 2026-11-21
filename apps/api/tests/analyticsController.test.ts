@@ -28,6 +28,10 @@ const Incident = {
 
 mock.module("db/client", () => ({ Website, WebsiteTick, Incident }));
 
+// Well-formed ObjectId strings (the controllers reject malformed ids with a 400).
+const W1 = "65a000000000000000000001";
+const MISSING = "65a0000000000000000000ff";
+
 const { getDashboardStats, getWebsiteAnalytics, getWebsiteIncidents } =
   await import("../controllers/analyticsController");
 
@@ -131,7 +135,7 @@ describe("getWebsiteAnalytics", () => {
     Website.findOne.mockReturnValue(query(null));
     const res = mockRes();
     await getWebsiteAnalytics(
-      mockReq({ params: { websiteId: "missing" } as any }),
+      mockReq({ params: { websiteId: MISSING } as any }),
       res
     );
 
@@ -154,7 +158,7 @@ describe("getWebsiteAnalytics", () => {
 
     const res = mockRes();
     await getWebsiteAnalytics(
-      mockReq({ params: { websiteId: "w1" } as any, query: {} as any }),
+      mockReq({ params: { websiteId: W1 } as any, query: {} as any }),
       res
     );
 
@@ -183,7 +187,7 @@ describe("getWebsiteAnalytics", () => {
     WebsiteTick.find.mockReturnValue(query([]));
 
     const res = mockRes();
-    await getWebsiteAnalytics(mockReq({ params: { websiteId: "w1" } as any }), res);
+    await getWebsiteAnalytics(mockReq({ params: { websiteId: W1 } as any }), res);
 
     expect(res.body).toMatchObject({
       uptime: 100,
@@ -199,7 +203,7 @@ describe("getWebsiteAnalytics", () => {
 
     const resValid = mockRes();
     await getWebsiteAnalytics(
-      mockReq({ params: { websiteId: "w1" } as any, query: { range: "7d" } as any }),
+      mockReq({ params: { websiteId: W1 } as any, query: { range: "7d" } as any }),
       resValid
     );
     expect(resValid.body.range).toBe("7d");
@@ -207,7 +211,7 @@ describe("getWebsiteAnalytics", () => {
     const resInvalid = mockRes();
     await getWebsiteAnalytics(
       mockReq({
-        params: { websiteId: "w1" } as any,
+        params: { websiteId: W1 } as any,
         query: { range: "bogus" } as any,
       }),
       resInvalid
@@ -216,12 +220,24 @@ describe("getWebsiteAnalytics", () => {
   });
 });
 
+describe("websiteId validation", () => {
+  test("400s on a malformed id without querying the database", async () => {
+    for (const handler of [getWebsiteAnalytics, getWebsiteIncidents]) {
+      const res = mockRes();
+      await handler(mockReq({ params: { websiteId: "not-an-id" } as any }), res);
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({ error: "Invalid website id." });
+    }
+    expect(Website.findOne).not.toHaveBeenCalled();
+  });
+});
+
 describe("getWebsiteIncidents", () => {
   test("404s when the website is not found", async () => {
     Website.findOne.mockReturnValue(query(null));
     const res = mockRes();
     await getWebsiteIncidents(
-      mockReq({ params: { websiteId: "missing" } as any }),
+      mockReq({ params: { websiteId: MISSING } as any }),
       res
     );
     expect(res.statusCode).toBe(404);
@@ -244,7 +260,7 @@ describe("getWebsiteIncidents", () => {
     );
 
     const res = mockRes();
-    await getWebsiteIncidents(mockReq({ params: { websiteId: "w1" } as any }), res);
+    await getWebsiteIncidents(mockReq({ params: { websiteId: W1 } as any }), res);
 
     expect(res.body.incidents).toHaveLength(1);
     expect(res.body.incidents[0]).toMatchObject({
