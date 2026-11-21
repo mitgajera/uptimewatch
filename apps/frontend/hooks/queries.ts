@@ -103,6 +103,19 @@ export function useUpdateMonitor(id: string) {
   });
 }
 
+export function useRotateHeartbeatToken(id: string) {
+  const api = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () =>
+      (await api.post<{ heartbeatToken: string }>(`/website/${id}/heartbeat-token`)).data,
+    onSuccess: ({ heartbeatToken }) =>
+      qc.setQueryData(queryKeys.monitor(id), (old: Monitor | undefined) =>
+        old ? { ...old, heartbeatToken } : old
+      ),
+  });
+}
+
 export function useDeleteMonitor() {
   const api = useApiClient();
   const qc = useQueryClient();
