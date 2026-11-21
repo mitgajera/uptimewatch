@@ -2,11 +2,15 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Request, Response } from "express";
 import { mockDb } from "./helpers/mockDb";
 
-const Website = { findOneAndUpdate: mock((..._a: any[]) => ({ lean: async () => null as any })) };
-mockDb({ Website });
-
-const recordCheckResult = mock(async (..._a: any[]) => {});
-mock.module("../monitor/record", () => ({ recordCheckResult }));
+const Website = {
+  findOneAndUpdate: mock((..._a: any[]) => ({ lean: async () => null as any })),
+  updateOne: mock(async (..._a: any[]) => ({ matchedCount: 1 })),
+};
+// Drive the real recordCheckResult: a module mock of it would leak into other test files.
+const WebsiteTick = { create: mock(async (..._a: any[]) => ({})) };
+const Incident = { findOne: mock(() => ({ sort: async () => null })) };
+const Notification = { create: mock(async (..._a: any[]) => ({})) };
+mockDb({ Website, WebsiteTick, Incident, Notification });
 
 const { receiveHeartbeat } = await import("../controllers/heartbeatController");
 
@@ -31,7 +35,8 @@ const found = (doc: any) => Website.findOneAndUpdate.mockReturnValue({ lean: asy
 
 beforeEach(() => {
   Website.findOneAndUpdate.mockReset();
-  recordCheckResult.mockReset();
+  WebsiteTick.create.mockClear();
+  Notification.create.mockClear();
   found(null);
 });
 
@@ -60,19 +65,19 @@ describe("receiveHeartbeat", () => {
     await receiveHeartbeat(req(TOKEN), res);
     expect(res.body.ok).toBe(true);
     expect(Website.findOneAndUpdate.mock.calls[0]![1].$set.lastHeartbeatAt).toBeInstanceOf(Date);
-    expect(recordCheckResult).not.toHaveBeenCalled();
+    expect(WebsiteTick.create).not.toHaveBeenCalled();
   });
 
   test("recovers a down monitor immediately", async () => {
     found({ _id: "w1", isDown: true });
     await receiveHeartbeat(req(TOKEN), mockRes());
-    expect(recordCheckResult).toHaveBeenCalledTimes(1);
-    expect(recordCheckResult.mock.calls[0]![1]).toMatchObject({ status: "UP" });
+    expect(WebsiteTick.create.mock.calls[0]![0]).toMatchObject({ websiteId: "w1", status: "UP" });
+    expect(Notification.create.mock.calls[0]![0]).toMatchObject({ kind: "UP" });
   });
 
   test("does not recover paused monitors", async () => {
     found({ _id: "w1", isDown: true, paused: true });
     await receiveHeartbeat(req(TOKEN), mockRes());
-    expect(recordCheckResult).not.toHaveBeenCalled();
+    expect(WebsiteTick.create).not.toHaveBeenCalled();
   });
 });
