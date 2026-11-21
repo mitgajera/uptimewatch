@@ -170,14 +170,24 @@ export function MonitorFormDialog({ open, onOpenChange, monitor, onSaved }: Moni
   const update = useUpdateMonitor(monitor?.id ?? "");
   const pending = create.isPending || update.isPending;
 
-  // Reset whenever the dialog opens so stale input/errors never linger.
+  // The detail page refetches the monitor every 30s; read the latest copy
+  // without letting each refetch reset what the user is typing.
+  const monitorRef = useRef(monitor);
+  useEffect(() => {
+    monitorRef.current = monitor;
+  }, [monitor]);
+
+  // Reset when the dialog opens (or targets another monitor) so stale
+  // input/errors never linger.
+  const monitorId = monitor?.id;
   useEffect(() => {
     if (!open) return;
-    setForm(monitor ? fromMonitor(monitor) : DEFAULTS);
+    const current = monitorRef.current;
+    setForm(current ? fromMonitor(current) : DEFAULTS);
     setErrors({});
     setFormError(null);
     setAdvancedOpen(false);
-  }, [open, monitor]);
+  }, [open, monitorId]);
 
   const set = <K extends Field>(key: K, value: FormState[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
