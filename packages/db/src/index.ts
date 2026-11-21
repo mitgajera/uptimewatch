@@ -7,7 +7,7 @@ export type { IWebsite } from "./models/Website";
 export { WebsiteTick } from "./models/WebsiteTick";
 export type { IWebsiteTick, WebsiteStatus } from "./models/WebsiteTick";
 export { Notification } from "./models/Notification";
-export type { INotification } from "./models/Notification";
+export type { INotification, NotificationKind } from "./models/Notification";
 export { Incident } from "./models/Incident";
 export type { IIncident } from "./models/Incident";
 

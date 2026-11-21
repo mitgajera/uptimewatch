@@ -1,8 +1,13 @@
 import { Schema, model, models, Types, Model } from "mongoose";
 
+export type NotificationKind = "DOWN" | "UP" | "SSL_EXPIRY" | "TEST";
+
 export interface INotification {
   _id: Types.ObjectId;
   userId: string; // Clerk user id (User._id)
+  websiteId?: Types.ObjectId | null;
+  kind?: NotificationKind | null;
+  subject?: string | null;
   message: string;
   sent: boolean;
   createdAt: Date;
@@ -12,6 +17,9 @@ export interface INotification {
 const notificationSchema = new Schema<INotification>(
   {
     userId: { type: String, required: true, index: true },
+    websiteId: { type: Schema.Types.ObjectId, ref: "Website", default: null },
+    kind: { type: String, enum: ["DOWN", "UP", "SSL_EXPIRY", "TEST"], default: null },
+    subject: { type: String, default: null },
     message: { type: String, required: true },
     sent: { type: Boolean, default: false },
   },
