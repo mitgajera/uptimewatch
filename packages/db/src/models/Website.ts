@@ -26,6 +26,8 @@ export interface IWebsite {
   /** Consecutive failed checks required before an incident is opened. */
   failureThreshold: number;
   paused: boolean;
+  /** While in the future, checks and alerts are suspended for planned work. */
+  maintenanceUntil?: Date | null;
 
   // Heartbeat monitors
   /** Secret path segment for the ping URL. */
@@ -84,6 +86,7 @@ const websiteSchema = new Schema<IWebsite>(
     },
     paused: { type: Boolean, default: MONITOR_DEFAULTS.paused },
 
+    maintenanceUntil: { type: Date, default: null },
     heartbeatToken: { type: String, default: null },
     graceSeconds: { type: Number, min: 0, max: 86_400, default: MONITOR_DEFAULTS.graceSeconds },
     lastHeartbeatAt: { type: Date, default: null },
