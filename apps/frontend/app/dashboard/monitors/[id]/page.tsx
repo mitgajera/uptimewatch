@@ -37,7 +37,7 @@ import { LatencyChart } from "@/components/monitors/latency-chart";
 import { IncidentList } from "@/components/monitors/incident-list";
 import { MonitorFormDialog } from "@/components/monitors/monitor-form-dialog";
 import { DeleteMonitorDialog } from "@/components/monitors/delete-monitor-dialog";
-import { PageSpeedInsightsModal } from "../../components/PageSpeedInsightsModal";
+import { PageSpeedInsightsModal } from "@/components/monitors/pagespeed-panel";
 
 const RANGES: AnalyticsRange[] = ["24h", "7d", "30d"];
 const DAY_MS = 24 * 60 * 60 * 1000;
