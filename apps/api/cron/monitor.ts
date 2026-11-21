@@ -3,6 +3,7 @@ import { Website, WebsiteTick, Notification, Incident } from "db/client";
 import { runHttpCheck } from "../monitor/httpCheck";
 import { evaluateTransition } from "../monitor/transition";
 import { isDue, mapSettledWithConcurrency } from "../monitor/schedule";
+import { downAlert, recoveryAlert } from "../monitor/messages";
 
 const CONCURRENCY = Math.max(1, Number(process.env.MONITOR_CONCURRENCY) || 25);
 
@@ -31,7 +32,6 @@ async function checkWebsite(website: any) {
     errorMessage,
   });
 
-  const label = website.name || website.url;
   const { event, consecutiveFailures, isDown } = evaluateTransition(website, result);
 
   await Website.updateOne(
@@ -61,7 +61,9 @@ async function checkWebsite(website: any) {
     });
     await Notification.create({
       userId: website.userId,
-      message: `🚨 ${label} is DOWN${statusCode ? ` (HTTP ${statusCode})` : ""}.`,
+      websiteId: website._id,
+      kind: "DOWN",
+      ...downAlert(website, result),
     });
   }
 
@@ -73,17 +75,21 @@ async function checkWebsite(website: any) {
       ongoing: true,
     }).sort({ startedAt: -1 });
 
+    let downtimeMs: number | null = null;
     if (openIncident) {
       const resolvedAt = new Date();
+      downtimeMs = resolvedAt.getTime() - openIncident.startedAt.getTime();
       openIncident.resolvedAt = resolvedAt;
       openIncident.ongoing = false;
-      openIncident.durationMs = resolvedAt.getTime() - openIncident.startedAt.getTime();
+      openIncident.durationMs = downtimeMs;
       await openIncident.save();
     }
 
     await Notification.create({
       userId: website.userId,
-      message: `🎉 ${label} is back ONLINE.`,
+      websiteId: website._id,
+      kind: "UP",
+      ...recoveryAlert(website, downtimeMs),
     });
   }
 
