@@ -92,6 +92,8 @@ describe("getPublicStatusPage", () => {
     expect(api.days).toHaveLength(90);
     expect(api.days.at(-1)).toEqual({ date: today, uptime: 75 });
     expect(JSON.stringify(res.body)).not.toContain("secret-path");
+    // Only the page's own, active monitors are ever loaded.
+    expect(Website.find.mock.calls[0]![0]).toEqual({ _id: { $in: [B, A] }, disabled: false });
     expect(res.body.incidents[0]).toMatchObject({ monitor: "API", ongoing: true });
   });
 
@@ -100,6 +102,20 @@ describe("getPublicStatusPage", () => {
     await getPublicStatusPage(req("acme"), mockRes());
     await getPublicStatusPage(req("acme"), mockRes());
     expect(StatusPage.findOne).toHaveBeenCalledTimes(1);
+  });
+
+  test("concurrent misses share one build", async () => {
+    StatusPage.findOne.mockReturnValue(query({ title: "Acme", websiteIds: [] }));
+    await Promise.all([getPublicStatusPage(req("acme"), mockRes()), getPublicStatusPage(req("acme"), mockRes())]);
+    expect(StatusPage.findOne).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not cache unknown slugs", async () => {
+    await getPublicStatusPage(req("nope"), mockRes());
+    StatusPage.findOne.mockReturnValue(query({ title: "Now published", websiteIds: [] }));
+    const res = mockRes();
+    await getPublicStatusPage(req("nope"), res);
+    expect(res.body.title).toBe("Now published");
   });
 });
 

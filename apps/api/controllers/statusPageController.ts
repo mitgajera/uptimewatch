@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { StatusPage, Website } from "db/client";
 import { isValidId } from "../utils/websites";
+import { clearPublicCache } from "./publicController";
 import { createStatusPageSchema, parseBody, updateStatusPageSchema } from "../validation";
 
 const MAX_STATUS_PAGES_PER_USER = 5;
@@ -53,6 +54,7 @@ export const createStatusPage = async (req: Request, res: Response) => {
 
   try {
     const page = await StatusPage.create({ ...body, websiteIds, userId });
+    clearPublicCache();
     res.status(201).json(serialize(page.toObject()));
   } catch (err) {
     if (isDuplicateKey(err)) {
@@ -90,6 +92,8 @@ export const updateStatusPage = async (req: Request, res: Response) => {
       res.status(404).json({ error: "Status page not found." });
       return;
     }
+    // Unpublishing, renaming or removing monitors must show up immediately.
+    clearPublicCache();
     res.json(serialize(page));
   } catch (err) {
     if (isDuplicateKey(err)) {
@@ -111,5 +115,6 @@ export const deleteStatusPage = async (req: Request, res: Response) => {
     res.status(404).json({ error: "Status page not found." });
     return;
   }
+  clearPublicCache();
   res.json({ message: "Status page deleted." });
 };

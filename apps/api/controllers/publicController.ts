@@ -14,12 +14,25 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const INCIDENT_HISTORY_DAYS = 14;
 /** Public pages can be popular; serve each from memory for a short while. */
 const CACHE_TTL_MS = 60_000;
+const MAX_CACHED_PAGES = 500;
 
-const cache = new Map<string, { expires: number; body: unknown }>();
+type PublicStatusPage = Awaited<ReturnType<typeof buildStatusPage>>;
+/** In-flight builds are cached too, so concurrent misses share one aggregation. */
+const cache = new Map<string, { expires: number; value: Promise<PublicStatusPage> }>();
 
-/** Test hook. */
+/** Drop every cached page; called whenever a status page is created, edited or deleted. */
 export function clearPublicCache() {
   cache.clear();
+}
+
+function pruneCache(now: number) {
+  if (cache.size <= MAX_CACHED_PAGES) return;
+  for (const [slug, entry] of cache) if (entry.expires <= now) cache.delete(slug);
+  // Still full: evict the oldest entries (Map iterates in insertion order).
+  for (const slug of cache.keys()) {
+    if (cache.size <= MAX_CACHED_PAGES) break;
+    cache.delete(slug);
+  }
 }
 
 const hostnameOf = (url: string) => {
@@ -117,11 +130,17 @@ async function loadStatusPage(rawSlug: unknown) {
 
   const now = Date.now();
   const hit = cache.get(slug);
-  if (hit && hit.expires > now) return hit.body as Awaited<ReturnType<typeof buildStatusPage>>;
+  if (hit && hit.expires > now) return hit.value;
 
-  const body = await buildStatusPage(slug, now);
-  cache.set(slug, { expires: now + CACHE_TTL_MS, body });
-  return body;
+  const value = buildStatusPage(slug, now);
+  cache.set(slug, { expires: now + CACHE_TTL_MS, value });
+  pruneCache(now);
+  // Don't keep misses (arbitrary slugs would fill memory) or failed builds.
+  const forget = () => {
+    if (cache.get(slug)?.value === value) cache.delete(slug);
+  };
+  value.then((body) => body || forget(), forget);
+  return value;
 }
 
 /** GET /public/status-pages/:slug — no auth. */
