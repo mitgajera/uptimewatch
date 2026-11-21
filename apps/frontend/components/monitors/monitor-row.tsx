@@ -31,7 +31,9 @@ export function MonitorRow({ monitor }: { monitor: Monitor }) {
             <span className="sr-only">, {STATE_LABEL[state]}</span>
           </p>
           <p className="truncate text-xs text-muted-foreground">
-            {state === "paused" ? "Paused" : `${hostnameOf(monitor.url)} · every ${formatInterval(monitor.intervalSeconds)}`}
+            {state === "paused"
+              ? "Paused"
+              : `${monitor.type === "heartbeat" ? "Heartbeat" : hostnameOf(monitor.url)} · every ${formatInterval(monitor.intervalSeconds)}`}
           </p>
         </div>
 
