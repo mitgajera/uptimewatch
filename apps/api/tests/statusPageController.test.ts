@@ -14,8 +14,9 @@ const StatusPage = {
   findOneAndUpdate: mock((..._a: any[]) => query<any>(null)),
   deleteOne: mock(async (..._a: any[]) => ({ deletedCount: 1 })),
 };
+let owned: { _id: string; disabled?: boolean }[] = [];
 const Website = {
-  countDocuments: mock(async (..._a: any[]) => 0),
+  find: mock((..._a: any[]) => ({ select: () => ({ lean: async () => owned }) })),
 };
 mockDb({ StatusPage, Website });
 
@@ -46,19 +47,20 @@ const W2 = "65a000000000000000000002";
 const PAGE = "65a0000000000000000000aa";
 
 beforeEach(() => {
-  for (const m of [...Object.values(StatusPage), Website.countDocuments]) m.mockReset();
+  for (const m of Object.values(StatusPage)) m.mockReset();
+  Website.find.mockClear();
+  owned = [];
   StatusPage.countDocuments.mockResolvedValue(0);
   StatusPage.create.mockImplementation(async (doc: any) => ({
     toObject: () => ({ _id: "p1", ...doc }),
   }));
   StatusPage.findOneAndUpdate.mockReturnValue(query(null));
   StatusPage.deleteOne.mockResolvedValue({ deletedCount: 1 });
-  Website.countDocuments.mockResolvedValue(0);
 });
 
 describe("createStatusPage", () => {
   test("creates a page for monitors the user owns", async () => {
-    Website.countDocuments.mockResolvedValue(2);
+    owned = [{ _id: W1 }, { _id: W2 }];
     const res = mockRes();
     await createStatusPage(
       mockReq({ body: { slug: "Acme", title: "Acme status", websiteIds: [W1, W2, W1] } }),
@@ -66,15 +68,11 @@ describe("createStatusPage", () => {
     );
     expect(res.statusCode).toBe(201);
     expect(res.body).toMatchObject({ slug: "acme", websiteIds: [W1, W2] });
-    expect(Website.countDocuments.mock.calls[0]![0]).toEqual({
-      _id: { $in: [W1, W2] },
-      userId: "user_1",
-      disabled: false,
-    });
+    expect(Website.find.mock.calls[0]![0]).toEqual({ _id: { $in: [W1, W2] }, userId: "user_1" });
   });
 
   test("rejects monitors the user does not own", async () => {
-    Website.countDocuments.mockResolvedValue(1);
+    owned = [{ _id: W1 }];
     const res = mockRes();
     await createStatusPage(
       mockReq({ body: { slug: "acme", title: "Acme", websiteIds: [W1, W2] } }),
@@ -99,6 +97,18 @@ describe("createStatusPage", () => {
 });
 
 describe("update/delete", () => {
+  test("drops deleted monitors instead of rejecting the edit", async () => {
+    owned = [{ _id: W1 }, { _id: W2, disabled: true }];
+    StatusPage.findOneAndUpdate.mockReturnValue(query({ _id: PAGE, slug: "acme", title: "Acme", websiteIds: [W1] }));
+    const res = mockRes();
+    await updateStatusPage(
+      mockReq({ params: { statusPageId: PAGE } as any, body: { websiteIds: [W1, W2] } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(StatusPage.findOneAndUpdate.mock.calls[0]![1]).toEqual({ $set: { websiteIds: [W1] } });
+  });
+
   test("404s pages owned by someone else", async () => {
     const res = mockRes();
     await updateStatusPage(

@@ -18,12 +18,17 @@ const serialize = (p: any) => ({
 
 const isDuplicateKey = (err: unknown) => (err as { code?: number })?.code === 11000;
 
-/** True when every id is an active monitor owned by the user. */
-async function ownsWebsites(userId: string, ids: string[]): Promise<boolean> {
+/**
+ * The ids to store: deduplicated, with deleted monitors dropped so a page that
+ * still lists one stays editable. Null if any id isn't the user's monitor.
+ */
+async function resolveWebsiteIds(userId: string, ids: string[]): Promise<string[] | null> {
   const unique = [...new Set(ids)];
-  if (unique.length === 0) return true;
-  const count = await Website.countDocuments({ _id: { $in: unique }, userId, disabled: false });
-  return count === unique.length;
+  if (unique.length === 0) return [];
+  const owned = await Website.find({ _id: { $in: unique }, userId }).select("_id disabled").lean();
+  if (owned.length !== unique.length) return null;
+  const active = new Set(owned.filter((w: any) => !w.disabled).map((w: any) => String(w._id)));
+  return unique.filter((id) => active.has(id));
 }
 
 export const listStatusPages = async (req: Request, res: Response) => {
@@ -36,7 +41,8 @@ export const createStatusPage = async (req: Request, res: Response) => {
   const body = parseBody(createStatusPageSchema, req, res);
   if (!body) return;
 
-  if (!(await ownsWebsites(userId, body.websiteIds ?? []))) {
+  const websiteIds = await resolveWebsiteIds(userId, body.websiteIds ?? []);
+  if (!websiteIds) {
     res.status(400).json({ message: "One or more monitors were not found." });
     return;
   }
@@ -46,11 +52,7 @@ export const createStatusPage = async (req: Request, res: Response) => {
   }
 
   try {
-    const page = await StatusPage.create({
-      ...body,
-      websiteIds: [...new Set(body.websiteIds ?? [])],
-      userId,
-    });
+    const page = await StatusPage.create({ ...body, websiteIds, userId });
     res.status(201).json(serialize(page.toObject()));
   } catch (err) {
     if (isDuplicateKey(err)) {
@@ -71,12 +73,13 @@ export const updateStatusPage = async (req: Request, res: Response) => {
 
   const body = parseBody(updateStatusPageSchema, req, res);
   if (!body) return;
-  if (body.websiteIds && !(await ownsWebsites(userId, body.websiteIds))) {
+  const websiteIds = body.websiteIds ? await resolveWebsiteIds(userId, body.websiteIds) : undefined;
+  if (websiteIds === null) {
     res.status(400).json({ message: "One or more monitors were not found." });
     return;
   }
 
-  const update = body.websiteIds ? { ...body, websiteIds: [...new Set(body.websiteIds)] } : body;
+  const update = websiteIds ? { ...body, websiteIds } : body;
   try {
     const page = await StatusPage.findOneAndUpdate(
       { _id: id, userId },
