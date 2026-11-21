@@ -1,5 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
+import helmet from "helmet";
+import { rateLimit } from "express-rate-limit";
 import { connectDB, mongoose } from "db/client";
 import { authMiddleware } from "./middleware/middleware";
 import websiteRoutes from "./routes/websiteRoutes";
@@ -10,6 +12,9 @@ import { scheduleWebsiteAlert } from "./cron/websiteAlert";
 import { scheduleSslCheck } from "./cron/sslCheck";
 
 const app = express();
+// Behind a proxy/load balancer, trust the first hop for client IPs (rate limits).
+if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || 1);
+app.use(helmet());
 // Cap request body size to mitigate memory-exhaustion DoS via large payloads.
 app.use(express.json({ limit: "10kb" }));
 
@@ -33,6 +38,18 @@ app.get("/health", (_req: Request, res: Response) => {
   const dbReady = mongoose.connection.readyState === 1;
   res.status(dbReady ? 200 : 503).json({ status: dbReady ? "ok" : "degraded", db: dbReady });
 });
+
+// Per-IP limit on the authenticated API to blunt abuse and token brute-forcing.
+app.use(
+  "/api/v1",
+  rateLimit({
+    windowMs: 60 * 1000,
+    limit: Number(process.env.RATE_LIMIT_PER_MINUTE) || 120,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { error: "Too many requests, please slow down." },
+  })
+);
 
 // Routes
 app.use("/api/v1", authMiddleware, websiteRoutes);
