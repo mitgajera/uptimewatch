@@ -18,6 +18,12 @@ const notificationSchema = new Schema<INotification>(
   { timestamps: true }
 );
 
+// The alert worker polls for unsent notifications.
+notificationSchema.index({ sent: 1, createdAt: 1 });
+
+// Notifications are a delivery queue, not history (incidents hold that).
+notificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
+
 export const Notification: Model<INotification> =
   (models.Notification as Model<INotification>) ||
   model<INotification>("Notification", notificationSchema);
