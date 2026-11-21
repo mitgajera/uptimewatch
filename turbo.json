@@ -9,8 +9,7 @@
       "env": [
         "CLERK_SECRET_KEY",
         "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
-        "NEXT_PUBLIC_API_BACKEND_URL",
-        "NEXT_PUBLIC_PSI_API_KEY"
+        "NEXT_PUBLIC_API_BACKEND_URL"
       ]
     },
     "lint": {
