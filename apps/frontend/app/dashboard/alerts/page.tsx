@@ -305,7 +305,8 @@ export default function AlertsPage() {
             <Mail className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <p className="text-muted-foreground">
               No channels yet, so alerts go to your account email. Add Slack, Discord, a webhook or
-              another inbox below. Once you add one, only your channels are used.
+              another inbox below. Once you add one, only your enabled channels are used, so disabling
+              them all pauses alerts.
             </p>
           </div>
         ) : (
