@@ -13,6 +13,12 @@ describe("isDue", () => {
     expect(isDue({ paused: true, lastCheckedAt: null }, NOW)).toBe(false);
   });
 
+  test("monitors in a maintenance window are not due until it ends", () => {
+    const until = new Date(NOW + 60_000);
+    expect(isDue({ maintenanceUntil: until, lastCheckedAt: null }, NOW)).toBe(false);
+    expect(isDue({ maintenanceUntil: new Date(NOW - 1), lastCheckedAt: null }, NOW)).toBe(true);
+  });
+
   test("respects the interval with a little grace for cron drift", () => {
     expect(isDue({ intervalSeconds: 300, lastCheckedAt: ago(120) }, NOW)).toBe(false);
     expect(isDue({ intervalSeconds: 300, lastCheckedAt: ago(297) }, NOW)).toBe(true);

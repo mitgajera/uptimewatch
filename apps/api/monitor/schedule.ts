@@ -5,13 +5,21 @@ const SCHEDULE_GRACE_MS = 5_000;
 
 export interface SchedulableMonitor {
   paused?: boolean;
+  maintenanceUntil?: Date | string | null;
   intervalSeconds?: number;
   lastCheckedAt?: Date | string | null;
 }
 
+export function inMaintenance(
+  monitor: { maintenanceUntil?: Date | string | null },
+  now: number
+): boolean {
+  return Boolean(monitor.maintenanceUntil) && new Date(monitor.maintenanceUntil!).getTime() > now;
+}
+
 /** Whether a monitor should be checked at `now` given its interval. */
 export function isDue(monitor: SchedulableMonitor, now: number): boolean {
-  if (monitor.paused) return false;
+  if (monitor.paused || inMaintenance(monitor, now)) return false;
   if (!monitor.lastCheckedAt) return true;
   const intervalMs = (monitor.intervalSeconds ?? MONITOR_DEFAULTS.intervalSeconds) * 1000;
   return now - new Date(monitor.lastCheckedAt).getTime() >= intervalMs - SCHEDULE_GRACE_MS;

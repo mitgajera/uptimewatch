@@ -7,6 +7,7 @@ export interface HeartbeatState {
   intervalSeconds?: number;
   graceSeconds?: number;
   lastHeartbeatAt?: Date | string | null;
+  maintenanceUntil?: Date | string | null;
   createdAt?: Date | string;
 }
 
@@ -15,9 +16,15 @@ export function generateHeartbeatToken(): string {
   return randomBytes(20).toString("base64url");
 }
 
-/** When the next ping must arrive by. Before the first ping, counts from creation. */
+/**
+ * When the next ping must arrive by. Counts from the last ping (or creation),
+ * or from the end of a maintenance window so jobs paused for it aren't late.
+ */
 export function heartbeatDeadline(state: HeartbeatState): number {
-  const base = new Date(state.lastHeartbeatAt ?? state.createdAt ?? 0).getTime();
+  const base = Math.max(
+    new Date(state.lastHeartbeatAt ?? state.createdAt ?? 0).getTime(),
+    state.maintenanceUntil ? new Date(state.maintenanceUntil).getTime() : 0
+  );
   const interval = state.intervalSeconds ?? MONITOR_DEFAULTS.intervalSeconds;
   const grace = state.graceSeconds ?? MONITOR_DEFAULTS.graceSeconds;
   return base + (interval + grace) * 1000;

@@ -10,6 +10,17 @@ describe("heartbeatDeadline", () => {
     ).toBe(T0 + 3900 * 1000);
   });
 
+  test("restarts the clock at the end of a maintenance window", () => {
+    expect(
+      heartbeatDeadline({
+        lastHeartbeatAt: new Date(T0),
+        maintenanceUntil: new Date(T0 + 10 * 3600_000),
+        intervalSeconds: 3600,
+        graceSeconds: 0,
+      })
+    ).toBe(T0 + 11 * 3600_000);
+  });
+
   test("counts from creation before the first ping", () => {
     expect(heartbeatDeadline({ createdAt: new Date(T0), intervalSeconds: 60, graceSeconds: 0 })).toBe(
       T0 + 60_000
