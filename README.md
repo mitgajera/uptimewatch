@@ -1,41 +1,34 @@
 # 🌐 UptimeWatch
 
-**UptimeWatch** is a full-stack **uptime & API monitoring platform** (a mini Datadog / UptimeRobot). Add your websites and APIs, and the platform checks them every minute, records response time and status, shows live uptime analytics, and alerts you by email the moment something goes down.
+**UptimeWatch** is a full-stack **uptime & API monitoring platform**. Add websites, APIs and cron jobs; UptimeWatch checks them on a schedule, records response time and failures, alerts you where you work, and publishes a status page for your users.
 
 ---
 
 ## 🚀 Features
 
-- 🔍 **Uptime Monitoring** – Every website/API is checked every minute from the central server.
-- 📊 **Real-Time Insights** – Dashboard with uptime %, response time, and check history.
-- 🚨 **Email Alerts** – Get notified instantly when a site goes down and again when it recovers.
-- ⚡ **PageSpeed Insights** – On-demand performance reports per website.
-- 👤 **Auth** – Email-based sign in/up via Clerk.
-- 🌓 **Dark/Light UI** – Clean, responsive Next.js + Tailwind interface.
-
----
-
-## 🎯 How It Works
-
-1. 🔐 **Sign in** with Clerk.
-2. ➕ **Add a website/API** URL (free).
-3. ⏱️ **The server checks it every minute** (`axios` + `node-cron`), recording status (UP/DOWN) and latency.
-4. 📈 **View analytics** — uptime %, latency, and check history on your dashboard.
-5. 📬 **Get alerted** by email when a site goes down or recovers.
+- 🔍 **HTTP monitoring** – Checks every 1 min to 24 h with custom method, timeout, expected status codes (`200-299,301`), required keyword, and safe redirect following.
+- 💓 **Heartbeat monitoring** – Cron jobs and backups ping a secret URL; you're alerted when a ping is overdue.
+- 🧠 **No false alarms** – Incidents open only after N consecutive failures, and every failure is classified (DNS, timeout, connection, TLS, HTTP status, keyword, missed heartbeat).
+- 🚨 **Alerts** – Email, Slack, Discord and generic webhooks, with test-send and retries. Falls back to your account email.
+- 🔐 **SSL expiry warnings** – At 30, 14, 7 and 1 days before a certificate expires.
+- 🌍 **Public status pages** – `/status/<slug>` with 90-day uptime bars, recent incidents and an embeddable SVG badge.
+- 🛠️ **Maintenance windows** – Suspend checks and alerts for planned work; status pages show "under maintenance".
+- 📊 **Analytics** – Uptime and p50/p95/p99 latency over 24 h, 7 d and 30 d, plus on-demand PageSpeed Insights.
+- 🌓 **Dark/light UI** – Next.js + Tailwind + shadcn/ui.
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Layer        | Tech                                  |
-|--------------|---------------------------------------|
-| Frontend     | Next.js, React, Tailwind CSS, TypeScript |
-| Backend      | Node.js, Express, Bun                  |
-| Database     | MongoDB, Mongoose                      |
-| Auth         | Clerk (JWT)                            |
-| Monitoring   | Axios, node-cron                       |
-| Email        | Resend                                 |
-| Monorepo     | Turborepo                             |
+| Layer      | Tech                                                   |
+|------------|--------------------------------------------------------|
+| Frontend   | Next.js (App Router), React, TanStack Query, Tailwind, shadcn/ui |
+| Backend    | Express 5 on Bun, zod validation, helmet, rate limiting |
+| Database   | MongoDB, Mongoose                                      |
+| Auth       | Clerk (JWTs verified via JWKS)                         |
+| Jobs       | node-cron with Mongo leases (single runner per job)    |
+| Email      | Resend                                                 |
+| Monorepo   | Turborepo, Bun workspaces                              |
 
 ---
 
@@ -43,38 +36,60 @@
 
 ```
 apps/
-├── api/          # Express backend: REST API + cron-based monitor + email alerts
-└── frontend/     # Next.js dashboard (uptime UI, auth, charts)
+├── api/            # Express API, background jobs and worker
+│   ├── app.ts      #   HTTP app (routes, middleware)
+│   ├── index.ts    #   API server (also runs jobs unless RUN_SCHEDULERS=false)
+│   ├── worker.ts   #   standalone background worker
+│   ├── monitor/    #   check engine: HTTP checks, heartbeats, SSL, transitions, alerts
+│   ├── notify/     #   alert channels and delivery
+│   ├── jobs/       #   scheduler + Mongo leases
+│   └── tests/      #   bun test suites
+└── frontend/       # Next.js dashboard, public status pages, landing page
 
 packages/
-├── db/           # Mongoose models + connection
-├── ui/           # Shared UI components
-├── eslint-config/
-└── typescript-config/
+├── db/             # Mongoose models (db/client) and shared constants (db/constants)
+├── ui/, eslint-config/, typescript-config/
 ```
 
 ---
 
 ## ⚙️ Local Development
 
-Prerequisites: **Bun**, a **MongoDB** instance (local or Atlas), a **Clerk** app, and a **Resend** API key.
+Prerequisites: **Bun**, **MongoDB** (local or Atlas), a **Clerk** app, and optionally a **Resend** key and a Google **PageSpeed Insights** key.
 
 ```bash
 bun install
 
-# Configure environment
-cp apps/api/.env.example apps/api/.env       # set MONGODB_URI, CLERK_ISSUER, RESEND_API_KEY
-cp packages/db/.env.example packages/db/.env # set MONGODB_URI
-# In apps/frontend, set Clerk keys + NEXT_PUBLIC_API_BACKEND_URL
+cp apps/api/.env.example apps/api/.env              # MONGODB_URI, CLERK_ISSUER, ...
+cp apps/frontend/.env.example apps/frontend/.env.local  # API URL + Clerk keys
 
-# Run everything
 bun run dev
 ```
 
-- API runs on **http://localhost:8080**
-- Frontend runs on **http://localhost:3000**
+- API: **http://localhost:8080** (health check at `/health`)
+- Frontend: **http://localhost:3000**
 
-See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for full details.
+`CLERK_ISSUER` is required: the API only trusts tokens from the issuers listed there.
+
+### Checks
+
+```bash
+bun run check-types           # type-check every workspace
+bun run --cwd apps/api test   # API test suite
+bun run --cwd apps/frontend lint
+```
+
+CI runs the same steps on every push and pull request.
+
+---
+
+## 🚢 Deployment notes
+
+- **Background jobs** run inside the API by default. To scale separately, run `bun run --cwd apps/api worker` and set `RUN_SCHEDULERS=false` on API instances. Each job takes a Mongo lease, so running several instances is safe.
+- Set `FRONTEND_URL` (CORS), `TRUST_PROXY=1` behind a load balancer, and `EMAIL_NOTIFICATIONS_ENABLED=true` with a verified `EMAIL_FROM` to send email.
+- Raw check results expire after 90 days and notifications after 30 (TTL indexes).
+
+See `apps/api/.env.example` for every setting.
 
 ---
 
