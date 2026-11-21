@@ -93,7 +93,7 @@ export function useUpdateMonitor(id: string) {
   const api = useApiClient();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: Partial<MonitorConfig>) =>
+    mutationFn: async (input: Partial<MonitorConfig> & { maintenanceUntil?: string | null }) =>
       (await api.patch<Monitor>(`/website/${id}`, input)).data,
     onSuccess: (monitor) => {
       qc.setQueryData(queryKeys.monitor(id), (old: Monitor | undefined) => ({ ...old, ...monitor }));
