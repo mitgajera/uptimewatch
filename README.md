@@ -69,7 +69,7 @@ bun run dev
 - API: **http://localhost:8080** (health check at `/health`)
 - Frontend: **http://localhost:3000**
 
-`CLERK_ISSUER` is required: the API only trusts tokens from the issuers listed there.
+The API only trusts tokens from `CLERK_ISSUER` (or, if unset, the issuer encoded in `CLERK_PUBLISHABLE_KEY`). With neither set, every request is rejected.
 
 ### Checks
 

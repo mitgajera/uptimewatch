@@ -2,29 +2,25 @@ import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { JwksClient } from "jwks-rsa";
 
+import { normalizeIssuer, resolveAllowedIssuers } from "./issuers";
+
 // One JWKS client per issuer (Clerk instance), cached across requests.
 const clients: Record<string, JwksClient> = {};
 
-function normalizeIssuer(issuer?: string): string | undefined {
-  return issuer?.trim().replace(/\/+$/, "");
-}
-
 /**
- * Issuers we trust, parsed from CLERK_ISSUER (comma-separated). The signing key
- * is fetched from the token's own `iss` claim, so this allowlist is required:
- * without it an attacker could present a token that points to a JWKS endpoint
- * they control and bypass authentication.
+ * Issuers we trust. The signing key is fetched from the token's own `iss`
+ * claim, so this allowlist is required: without it an attacker could present
+ * a token that points to a JWKS endpoint they control and bypass authentication.
  */
-const allowedIssuers = (process.env.CLERK_ISSUER || "")
-  .split(",")
-  .map((s) => normalizeIssuer(s))
-  .filter((s): s is string => Boolean(s));
+const allowedIssuers = resolveAllowedIssuers(process.env);
 
 if (allowedIssuers.length === 0) {
   console.error(
-    "[auth] CLERK_ISSUER is not set. All requests will be rejected. " +
-      "Set CLERK_ISSUER to your Clerk issuer URL (comma-separated for multiple)."
+    "[auth] No trusted Clerk issuer. All requests will be rejected. " +
+      "Set CLERK_ISSUER (comma-separated for multiple) or CLERK_PUBLISHABLE_KEY."
   );
+} else if (!process.env.CLERK_ISSUER) {
+  console.info(`[auth] Trusting Clerk issuer derived from the publishable key: ${allowedIssuers.join(", ")}`);
 }
 
 function getJwksClient(issuer: string): JwksClient {
@@ -66,7 +62,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       return;
     }
 
-    // Only trust tokens from explicit allow-listed issuers.
+    // Only trust tokens from allow-listed issuers.
     if (!allowedIssuers.includes(normalizedTokenIssuer)) {
       res.status(401).send("Unauthorized");
       return;
