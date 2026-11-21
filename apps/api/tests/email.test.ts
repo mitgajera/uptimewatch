@@ -18,34 +18,55 @@ mock.module("../utils/resendClient", () => ({
 
 const { sendEmail } = await import("../lib/email");
 
-const ORIGINAL_FROM = process.env.EMAIL_FROM;
+const ORIGINAL_ENV = {
+  EMAIL_FROM: process.env.EMAIL_FROM,
+  EMAIL_NOTIFICATIONS_ENABLED: process.env.EMAIL_NOTIFICATIONS_ENABLED,
+  RESEND_API_KEY: process.env.RESEND_API_KEY,
+};
 
 beforeEach(() => {
+  process.env.EMAIL_NOTIFICATIONS_ENABLED = "true";
+  process.env.RESEND_API_KEY = "re_test";
   sendMock.mockReset();
   sendMock.mockResolvedValue({ data: { id: "email_123" }, error: null });
 });
 
 afterEach(() => {
-  if (ORIGINAL_FROM === undefined) delete process.env.EMAIL_FROM;
-  else process.env.EMAIL_FROM = ORIGINAL_FROM;
+  for (const [key, value] of Object.entries(ORIGINAL_ENV)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
 });
 
 describe("sendEmail", () => {
-  test("throws (without calling Resend) when text is empty", async () => {
-    await expect(
-      sendEmail({ to: "a@b.com", subject: "hi", text: "" })
-    ).rejects.toThrow("Text content must be provided.");
+  test("skips sending when EMAIL_NOTIFICATIONS_ENABLED is not 'true'", async () => {
+    process.env.EMAIL_NOTIFICATIONS_ENABLED = "false";
+    const result = await sendEmail({ to: "a@b.com", subject: "hi", text: "body" });
+    expect(result).toEqual({ ok: true, skipped: true });
     expect(sendMock).not.toHaveBeenCalled();
   });
 
-  test("sends and returns the SDK data on success", async () => {
-    const data = await sendEmail({
+  test("fails (without calling Resend) when text is empty", async () => {
+    const result = await sendEmail({ to: "a@b.com", subject: "hi", text: "" });
+    expect(result).toEqual({ ok: false, error: "Text content must be provided." });
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  test("fails (without calling Resend) when RESEND_API_KEY is missing", async () => {
+    delete process.env.RESEND_API_KEY;
+    const result = await sendEmail({ to: "a@b.com", subject: "hi", text: "body" });
+    expect(result).toEqual({ ok: false, error: "RESEND_API_KEY is missing." });
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  test("sends and reports ok on success", async () => {
+    const result = await sendEmail({
       to: "user@example.com",
       subject: "Alert",
       text: "Your site is down",
     });
 
-    expect(data).toEqual({ id: "email_123" });
+    expect(result).toEqual({ ok: true });
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(sendMock).toHaveBeenCalledWith({
       from: "UptimeWatch <onboarding@resend.dev>",
@@ -69,8 +90,18 @@ describe("sendEmail", () => {
       error: { message: "domain not verified" },
     });
 
-    await expect(
-      sendEmail({ to: "user@example.com", subject: "Alert", text: "body" })
-    ).rejects.toThrow("Resend failed to send email: domain not verified");
+    const result = await sendEmail({ to: "user@example.com", subject: "Alert", text: "body" });
+    expect(result).toEqual({ ok: false, error: "domain not verified" });
+  });
+
+  test("adds a hint when the sender domain is unverified", async () => {
+    sendMock.mockResolvedValue({
+      data: null,
+      error: { message: "You can only send testing emails to your own address" },
+    });
+
+    const result = await sendEmail({ to: "user@example.com", subject: "Alert", text: "body" });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("Set EMAIL_FROM");
   });
 });
