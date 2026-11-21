@@ -24,9 +24,10 @@ const DURATIONS = [
 export function MaintenanceMenu({ monitor, active }: { monitor: Monitor; active: boolean }) {
   const update = useUpdateMonitor(monitor.id);
 
-  const setUntil = (maintenanceUntil: string | null, message: string) =>
+  // The server times the window, so a skewed browser clock can't shorten it.
+  const setMaintenance = (input: { maintenanceMinutes: number } | { maintenanceUntil: null }, message: string) =>
     update.mutate(
-      { maintenanceUntil },
+      input,
       {
         onSuccess: () => toast.success(message),
         onError: (err) => toast.error(apiErrorMessage(err, "Could not update maintenance.")),
@@ -35,7 +36,7 @@ export function MaintenanceMenu({ monitor, active }: { monitor: Monitor; active:
 
   if (active) {
     return (
-      <Button variant="outline" disabled={update.isPending} onClick={() => setUntil(null, "Maintenance ended")}>
+      <Button variant="outline" disabled={update.isPending} onClick={() => setMaintenance({ maintenanceUntil: null }, "Maintenance ended")}>
         <Wrench className="size-4" aria-hidden="true" />
         End maintenance
       </Button>
@@ -59,10 +60,7 @@ export function MaintenanceMenu({ monitor, active }: { monitor: Monitor; active:
           <DropdownMenuItem
             key={d.minutes}
             onSelect={() =>
-              setUntil(
-                new Date(Date.now() + d.minutes * 60_000).toISOString(),
-                `Maintenance started for ${d.label}`
-              )
+              setMaintenance({ maintenanceMinutes: d.minutes }, `Maintenance started for ${d.label}`)
             }
           >
             {d.label}
