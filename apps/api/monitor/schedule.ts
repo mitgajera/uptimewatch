@@ -1,7 +1,7 @@
 import { MONITOR_DEFAULTS } from "db/constants";
 
 /** Cron fires roughly every minute; allow this much early drift. */
-const SCHEDULE_GRACE_MS = 5_000;
+export const SCHEDULE_GRACE_MS = 5_000;
 
 export interface SchedulableMonitor {
   paused?: boolean;

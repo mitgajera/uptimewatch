@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { MONITOR_DEFAULTS } from "db/constants";
 import { formatDuration } from "./messages";
 import type { CheckResult } from "./httpCheck";
+import { inMaintenance, isDue, type SchedulableMonitor } from "./schedule";
 
 export interface HeartbeatState {
   intervalSeconds?: number;
@@ -49,4 +50,18 @@ export function evaluateHeartbeat(state: HeartbeatState, now: number): CheckResu
       ? `No ping for ${formatDuration(now - new Date(state.lastHeartbeatAt).getTime())}`
       : "No ping received yet",
   };
+}
+
+/**
+ * Heartbeats are evaluated on their interval (to record UP ticks), and also as
+ * soon as an up monitor's deadline passes, so a missed ping is caught within a
+ * minute instead of up to a whole interval later.
+ */
+export function isHeartbeatDue(
+  monitor: HeartbeatState & SchedulableMonitor & { isDown?: boolean },
+  now: number
+): boolean {
+  if (isDue(monitor, now)) return true;
+  if (monitor.paused || monitor.isDown || inMaintenance(monitor, now)) return false;
+  return now > heartbeatDeadline(monitor);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { evaluateHeartbeat, generateHeartbeatToken, heartbeatDeadline } from "../monitor/heartbeat";
+import { evaluateHeartbeat, generateHeartbeatToken, heartbeatDeadline, isHeartbeatDue } from "../monitor/heartbeat";
 
 const T0 = Date.UTC(2024, 0, 1, 12);
 
@@ -52,5 +52,35 @@ describe("generateHeartbeatToken", () => {
     const a = generateHeartbeatToken();
     expect(a).toMatch(/^[A-Za-z0-9_-]{27}$/);
     expect(generateHeartbeatToken()).not.toBe(a);
+  });
+});
+
+describe("isHeartbeatDue", () => {
+  const MIN = 60_000;
+  const now = Date.parse("2026-01-02T00:00:00Z");
+  // Daily heartbeat, 5 min grace, last checked 2 min ago.
+  const daily = (over: Record<string, unknown> = {}) => ({
+    intervalSeconds: 86_400,
+    graceSeconds: 300,
+    lastCheckedAt: new Date(now - 2 * MIN),
+    ...over,
+  });
+
+  test("is due as soon as an up monitor's deadline passes, not a whole interval later", () => {
+    expect(isHeartbeatDue(daily({ lastHeartbeatAt: new Date(now - 86_400_000 - 6 * MIN) }), now)).toBe(true);
+  });
+
+  test("waits for the interval while pings are on time", () => {
+    expect(isHeartbeatDue(daily({ lastHeartbeatAt: new Date(now - 60 * MIN) }), now)).toBe(false);
+  });
+
+  test("does not re-evaluate an already-down monitor every minute", () => {
+    expect(isHeartbeatDue(daily({ isDown: true, lastHeartbeatAt: new Date(0) }), now)).toBe(false);
+  });
+
+  test("respects pause and maintenance", () => {
+    const late = { lastHeartbeatAt: new Date(0) };
+    expect(isHeartbeatDue(daily({ ...late, paused: true }), now)).toBe(false);
+    expect(isHeartbeatDue(daily({ ...late, maintenanceUntil: new Date(now + MIN) }), now)).toBe(false);
   });
 });
