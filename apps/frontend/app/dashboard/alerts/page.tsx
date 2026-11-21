@@ -3,6 +3,15 @@ import { useId, useState } from "react";
 import { Hash, Loader2, Mail, MessageSquare, RotateCw, Send, Trash2, Webhook } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -72,6 +81,7 @@ function ChannelRow({ channel }: { channel: AlertChannel }) {
   const test = useTestAlertChannel();
   const { icon: Icon, label } = TYPES[channel.type];
   const title = channel.name || label;
+  const [confirming, setConfirming] = useState(false);
 
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3">
@@ -121,16 +131,40 @@ function ChannelRow({ channel }: { channel: AlertChannel }) {
           className="size-10 text-muted-foreground hover:text-destructive"
           aria-label={`Remove ${title}`}
           disabled={remove.isPending}
-          onClick={() =>
-            remove.mutate(channel.id, {
-              onSuccess: () => toast.success(`Removed ${title}`),
-              onError: (err) => toast.error(apiErrorMessage(err, "Could not remove the channel.")),
-            })
-          }
+          onClick={() => setConfirming(true)}
         >
           <Trash2 className="size-4" aria-hidden="true" />
         </Button>
       </div>
+      <AlertDialog open={confirming} onOpenChange={(o) => !o && !remove.isPending && setConfirming(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {title}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Alerts stop going to {maskTarget(channel)}. You&apos;ll need to re-enter it to add it back.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={remove.isPending}>Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={remove.isPending}
+              aria-busy={remove.isPending}
+              onClick={() =>
+                remove.mutate(channel.id, {
+                  onSuccess: () => {
+                    setConfirming(false);
+                    toast.success(`Removed ${title}`);
+                  },
+                  onError: (err) => toast.error(apiErrorMessage(err, "Could not remove the channel.")),
+                })
+              }
+            >
+              Remove channel
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </li>
   );
 }
