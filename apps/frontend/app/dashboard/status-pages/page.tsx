@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { ExternalLink, Globe, Pencil, Plus, RotateCw, Trash2 } from "lucide-react";
+import { BadgeCheck, ExternalLink, Globe, Pencil, Plus, RotateCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import { useDeleteStatusPage, useStatusPages } from "@/hooks/queries";
 import { apiErrorMessage } from "@/lib/api/errors";
 import type { StatusPage } from "@/lib/api/types";
 import { StatusPageDialog } from "./status-page-dialog";
+import { BadgeDialog } from "./badge-dialog";
 
 export default function StatusPagesPage() {
   const pages = useStatusPages();
@@ -25,6 +26,7 @@ export default function StatusPagesPage() {
   const [editing, setEditing] = useState<StatusPage | undefined>();
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState<StatusPage | null>(null);
+  const [badgeFor, setBadgeFor] = useState<StatusPage | null>(null);
 
   const openCreate = () => {
     setEditing(undefined);
@@ -104,6 +106,17 @@ export default function StatusPagesPage() {
                     </a>
                   </Button>
                 )}
+                {p.published && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-10"
+                    aria-label={`Get a status badge for ${p.title}`}
+                    onClick={() => setBadgeFor(p)}
+                  >
+                    <BadgeCheck className="size-4" aria-hidden="true" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -132,6 +145,7 @@ export default function StatusPagesPage() {
       )}
 
       <StatusPageDialog open={formOpen} onOpenChange={setFormOpen} page={editing} />
+      <BadgeDialog page={badgeFor} onOpenChange={(o) => !o && setBadgeFor(null)} />
 
       <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && !remove.isPending && setDeleting(null)}>
         <AlertDialogContent>
