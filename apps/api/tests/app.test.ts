@@ -57,6 +57,12 @@ describe("app", () => {
     expect(await res.json()).toEqual({ error: "Not found" });
   });
 
+  test("heartbeats only accept GET, HEAD and POST", async () => {
+    // Other methods fall through to the authenticated API instead of recording a ping.
+    const res = await fetch(`${base}/api/v1/public/heartbeat/abcdefghijklmnop`, { method: "DELETE" });
+    expect(res.status).toBe(401);
+  });
+
   test("malformed and oversized JSON bodies are client errors, not 500s", async () => {
     const post = (body: string) =>
       fetch(`${base}/nope`, { method: "POST", headers: { "Content-Type": "application/json" }, body });
