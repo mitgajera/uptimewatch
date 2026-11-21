@@ -26,7 +26,9 @@ interface MonitorRef {
   url: string;
 }
 
-const labelOf = (m: MonitorRef) => m.name?.trim() || m.url;
+const labelOf = (m: MonitorRef) => m.name?.trim() || m.url || "Heartbeat monitor";
+/** Heartbeat monitors have no URL; omit the line rather than print "URL: ". */
+const urlLine = (m: MonitorRef) => (m.url ? `URL: ${m.url}` : null);
 
 export function formatDuration(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -49,11 +51,13 @@ export function downAlert(
     message: [
       `${label} is DOWN.`,
       ``,
-      `URL: ${monitor.url}`,
+      urlLine(monitor),
       `Reason: ${errorLabel(failure.errorType)}${failure.statusCode ? ` (HTTP ${failure.statusCode})` : ""}`,
       `Details: ${reason}`,
       `Detected: ${new Date().toUTCString()}`,
-    ].join("\n"),
+    ]
+      .filter((line): line is string => line !== null)
+      .join("\n"),
   };
 }
 
@@ -88,7 +92,7 @@ export function recoveryAlert(monitor: MonitorRef, downtimeMs: number | null): A
     message: [
       `${label} is back UP.`,
       ``,
-      `URL: ${monitor.url}`,
+      urlLine(monitor),
       downtimeMs != null ? `Downtime: ${formatDuration(downtimeMs)}` : null,
       `Recovered: ${new Date().toUTCString()}`,
     ]

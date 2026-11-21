@@ -34,6 +34,18 @@ describe("alert messages", () => {
   });
 });
 
+describe("heartbeat alerts", () => {
+  test("omit the URL line and fall back to a generic label", () => {
+    const alert = downAlert(
+      { name: "", url: "" },
+      { errorType: "MISSED", errorMessage: "No ping for 2h 0m", statusCode: null }
+    );
+    expect(alert.subject).toBe("🔴 Heartbeat monitor is DOWN");
+    expect(alert.message).not.toContain("URL:");
+    expect(alert.message).toContain("Reason: Heartbeat not received");
+  });
+});
+
 describe("sslExpiryAlert", () => {
   const cert = { validTo: new Date("2030-01-01T00:00:00Z"), issuer: "Let's Encrypt" };
 
