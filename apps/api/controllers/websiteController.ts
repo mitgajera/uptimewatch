@@ -98,7 +98,15 @@ export const updateWebsite = async (req: Request, res: Response) => {
   res.json(serializeWebsite(website));
 };
 
-// get a single monitor's configuration and current state
+
+
+// The dashboard only renders the most recent window of ticks per website;
+// longer history is served by the bucketed analytics endpoint.
+export const RECENT_TICKS_WINDOW_MS = 30 * 60 * 1000;
+
+const recentSince = () => new Date(Date.now() - RECENT_TICKS_WINDOW_MS);
+
+// get a single monitor's configuration, current state and recent ticks
 export const getWebsite = async (req: Request, res: Response) => {
   const website = await findUserWebsiteOr404(res, {
     websiteId: req.params.websiteId!,
@@ -106,14 +114,15 @@ export const getWebsite = async (req: Request, res: Response) => {
     disabled: false,
   });
   if (!website) return;
-  res.json(serializeWebsite(website));
+
+  const websiteTicks = await WebsiteTick.find({
+    websiteId: website._id,
+    createdAt: { $gte: recentSince() },
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+  res.json(serializeWebsite(website, websiteTicks));
 };
-
-// The dashboard only renders the most recent window of ticks per website;
-// longer history is served by the bucketed analytics endpoint.
-export const RECENT_TICKS_WINDOW_MS = 30 * 60 * 1000;
-
-const recentSince = () => new Date(Date.now() - RECENT_TICKS_WINDOW_MS);
 
 // get website status (with its recent ticks)
 export const getWebsiteStatus = async (req: Request, res: Response) => {

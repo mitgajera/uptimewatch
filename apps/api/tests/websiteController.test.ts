@@ -28,7 +28,14 @@ const WebsiteTick = {
 
 mockDb({ Website, WebsiteTick });
 
-const { getAllWebsites, disableWebsite, createWebsite, updateWebsite, RECENT_TICKS_WINDOW_MS } =
+const {
+  getAllWebsites,
+  getWebsite,
+  disableWebsite,
+  createWebsite,
+  updateWebsite,
+  RECENT_TICKS_WINDOW_MS,
+} =
   await import(
   "../controllers/websiteController"
 );
@@ -249,5 +256,16 @@ describe("updateWebsite", () => {
     );
     expect(res.statusCode).toBe(400);
     expect(Website.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("getWebsite", () => {
+  test("returns the monitor with its recent ticks", async () => {
+    Website.findOne.mockReturnValue(query({ _id: ID, url: PUBLIC_URL }));
+    WebsiteTick.find.mockReturnValue(query([{ _id: "t1", websiteId: ID, status: "UP" }]));
+    const res = mockRes();
+    await getWebsite(mockReq({ params: { websiteId: ID } as any }), res);
+    expect(res.body).toMatchObject({ id: ID, websiteTicks: [{ id: "t1" }] });
+    expect(WebsiteTick.find.mock.calls[0]![0].websiteId).toBe(ID);
   });
 });
