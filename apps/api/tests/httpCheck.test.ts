@@ -123,13 +123,37 @@ describe("runHttpCheck monitor configuration", () => {
       deps({ request: request as any })
     );
     expect(missing).toMatchObject({ status: "DOWN", errorType: "KEYWORD" });
-    expect(request.mock.calls[0]![0]).toMatchObject({ responseType: "text" });
+    expect(request.mock.calls[0]![0]).toMatchObject({ responseType: "stream" });
 
     const present = await runHttpCheck(
       { url: "https://x.dev", keyword: "Maintenance" },
       deps({ request: request as any })
     );
     expect(present.status).toBe("UP");
+  });
+
+  test("finds a keyword split across chunks, reading only the start of huge bodies", async () => {
+    async function* body(chunks: string[]) {
+      for (const c of chunks) yield new TextEncoder().encode(c);
+    }
+    const split = mock(async (_config: any) => ({ status: 200, data: body(["<h1>Wel", "come</h1>"]) }));
+    expect((await runHttpCheck({ url: "https://x.dev", keyword: "Welcome" }, deps({ request: split as any }))).status).toBe("UP");
+
+    const big = "x".repeat(1024 * 1024);
+    const late = mock(async (_config: any) => ({ status: 200, data: body(["Welcome", big, big, big]) }));
+    expect((await runHttpCheck({ url: "https://x.dev", keyword: "Welcome" }, deps({ request: late as any }))).status).toBe("UP");
+
+    const beyond = mock(async (_config: any) => ({ status: 200, data: body([big, big, "Welcome"]) }));
+    expect(await runHttpCheck({ url: "https://x.dev", keyword: "Welcome" }, deps({ request: beyond as any }))).toMatchObject({
+      status: "DOWN",
+      errorType: "KEYWORD",
+    });
+  });
+
+  test("uses GET for a HEAD monitor with a keyword, since HEAD has no body", async () => {
+    const request = mock(async (_config: any) => ({ status: 200, data: "Welcome" }));
+    await runHttpCheck({ url: "https://x.dev", method: "HEAD", keyword: "Welcome" }, deps({ request: request as any }));
+    expect(request.mock.calls[0]![0]).toMatchObject({ method: "GET" });
   });
 
   test("streams and discards the body when no keyword is set", async () => {
@@ -196,5 +220,18 @@ describe("runHttpCheck redirects", () => {
     );
     expect(result).toMatchObject({ status: "UP", statusCode: 302 });
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  test("switches to GET after a 303, and for POST after a 301/302, like browsers", async () => {
+    const methods = async (method: "POST" | "HEAD", status: number) => {
+      const responses = [redirect("/next", status), { status: 200 }];
+      const request = mock(async (_config: any) => responses.shift()!);
+      await runHttpCheck({ url: "https://x.dev", method }, deps({ request: request as any }));
+      return request.mock.calls.map((c) => c[0].method);
+    };
+    expect(await methods("POST", 303)).toEqual(["POST", "GET"]);
+    expect(await methods("POST", 302)).toEqual(["POST", "GET"]);
+    expect(await methods("POST", 307)).toEqual(["POST", "POST"]);
+    expect(await methods("HEAD", 303)).toEqual(["HEAD", "HEAD"]);
   });
 });
