@@ -8,6 +8,7 @@ const ERROR_LABELS: Record<CheckErrorType, string> = {
   HTTP_STATUS: "Unexpected HTTP status",
   KEYWORD: "Keyword not found",
   BLOCKED: "Blocked target address",
+  MISSED: "Heartbeat not received",
   UNKNOWN: "Unknown error",
 };
 

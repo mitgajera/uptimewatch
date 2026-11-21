@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 export { User } from "./models/User";
 export type { IUser } from "./models/User";
 export { Website, MONITOR_DEFAULTS, MONITOR_INTERVALS } from "./models/Website";
-export type { IWebsite, MonitorMethod } from "./models/Website";
+export type { IWebsite, MonitorMethod, MonitorType } from "./models/Website";
 export { WebsiteTick, TICK_RETENTION_DAYS, CHECK_ERROR_TYPES } from "./models/WebsiteTick";
 export type { IWebsiteTick, WebsiteStatus, CheckErrorType } from "./models/WebsiteTick";
 export { Notification } from "./models/Notification";

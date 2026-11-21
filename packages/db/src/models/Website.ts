@@ -1,11 +1,13 @@
 import { Schema, model, models, Types, Model } from "mongoose";
-import { MONITOR_DEFAULTS, MONITOR_INTERVALS, type MonitorMethod } from "../constants";
+import { MONITOR_DEFAULTS, MONITOR_INTERVALS, type MonitorMethod, type MonitorType } from "../constants";
 
-export type { MonitorMethod };
+export type { MonitorMethod, MonitorType };
 export { MONITOR_DEFAULTS, MONITOR_INTERVALS };
 
 export interface IWebsite {
   _id: Types.ObjectId;
+  type: MonitorType;
+  /** Target URL for http monitors; empty for heartbeats. */
   url: string;
   name: string;
   userId: string; // Clerk user id (User._id)
@@ -24,6 +26,12 @@ export interface IWebsite {
   /** Consecutive failed checks required before an incident is opened. */
   failureThreshold: number;
   paused: boolean;
+
+  // Heartbeat monitors
+  /** Secret path segment for the ping URL. */
+  heartbeatToken?: string | null;
+  graceSeconds: number;
+  lastHeartbeatAt?: Date | null;
 
   // Runtime state maintained by the monitor
   consecutiveFailures: number;
@@ -45,7 +53,14 @@ export interface IWebsite {
 
 const websiteSchema = new Schema<IWebsite>(
   {
-    url: { type: String, required: true },
+    type: { type: String, enum: ["http", "heartbeat"], default: MONITOR_DEFAULTS.type },
+    url: {
+      type: String,
+      default: "",
+      required: function (this: { type?: MonitorType }) {
+        return this.type !== "heartbeat";
+      },
+    },
     name: { type: String, default: "" },
     userId: { type: String, required: true, index: true },
     disabled: { type: Boolean, default: false },
@@ -69,6 +84,10 @@ const websiteSchema = new Schema<IWebsite>(
     },
     paused: { type: Boolean, default: MONITOR_DEFAULTS.paused },
 
+    heartbeatToken: { type: String, default: null },
+    graceSeconds: { type: Number, min: 0, max: 86_400, default: MONITOR_DEFAULTS.graceSeconds },
+    lastHeartbeatAt: { type: Date, default: null },
+
     consecutiveFailures: { type: Number, default: 0 },
     lastCheckedAt: { type: Date, default: null },
     lastStatusCode: { type: Number, default: null },
@@ -81,6 +100,12 @@ const websiteSchema = new Schema<IWebsite>(
     sslAlertedThreshold: { type: Number, default: null },
   },
   { timestamps: true }
+);
+
+// Ping lookups; sparse because http monitors have no token.
+websiteSchema.index(
+  { heartbeatToken: 1 },
+  { unique: true, partialFilterExpression: { heartbeatToken: { $type: "string" } } }
 );
 
 // The scheduler scans active monitors on every tick.
