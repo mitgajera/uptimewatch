@@ -37,6 +37,8 @@ export function useApiClient() {
         request<T>({ ...config, method: "get", url }),
       post: <T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
         request<T>({ ...config, method: "post", url, data }),
+      patch: <T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
+        request<T>({ ...config, method: "patch", url, data }),
       delete: <T = unknown>(url: string, config?: AxiosRequestConfig) =>
         request<T>({ ...config, method: "delete", url }),
     }),
