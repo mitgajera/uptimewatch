@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useApiClient } from '@/hooks/useApiClient';
 import { apiErrorMessage } from '@/lib/api/errors';
+import { toast } from 'sonner';
 
 interface PageSpeedInsightsModalProps {
   websiteId: string;
@@ -10,16 +11,16 @@ interface PageSpeedInsightsModalProps {
 
 // color helpers
 function getScoreColor(score: number | null | undefined) {
-  if (score == null) return 'text-gray-400';
-  if (score >= 90) return 'text-green-600';
-  if (score >= 50) return 'text-yellow-500';
-  return 'text-red-500';
+  if (score == null) return 'text-muted-foreground';
+  if (score >= 90) return 'text-success';
+  if (score >= 50) return 'text-warning';
+  return 'text-destructive';
 }
 function getStatusColor(status: string) {
-  if (status === 'GOOD') return 'text-green-600';
-  if (status === 'NEEDS_IMPROVEMENT') return 'text-yellow-500';
-  if (status === 'POOR') return 'text-red-500';
-  return 'text-gray-400';
+  if (status === 'GOOD') return 'text-success';
+  if (status === 'NEEDS_IMPROVEMENT') return 'text-warning';
+  if (status === 'POOR') return 'text-destructive';
+  return 'text-muted-foreground';
 }
 
 const METRIC_LABELS: Record<string, { label: string; good: string; unit?: string }> = {
@@ -96,17 +97,17 @@ export function PageSpeedInsightsModal({ websiteId, url }: PageSpeedInsightsModa
 
   if (loading)
     return (
-      <div className="py-16 text-center text-lg font-semibold">
-        Loading PageSpeed Insights...
+      <div className="py-16 text-center text-sm text-muted-foreground" role="status" aria-live="polite">
+        Running Lighthouse… this usually takes 15–30 seconds.
       </div>
     );
   if (error)
     return (
-      <div className="py-16 text-center text-red-500 text-lg font-semibold">
+      <div role="alert" className="flex flex-col items-center gap-4 py-16 text-center text-sm text-destructive">
         {error}
         <button
           onClick={fetchData}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+          className="inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Retry
         </button>
@@ -147,15 +148,15 @@ export function PageSpeedInsightsModal({ websiteId, url }: PageSpeedInsightsModa
   const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url)}`;
 
   return (
-    <div className="w-full h-full max-w-full max-h-full overflow-y-auto bg-gradient-to-br from-white via-zinc-50 to-zinc-100 dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-900 rounded-xl shadow-2xl flex flex-col">
+    <div className="w-full h-full max-w-full max-h-full overflow-y-auto bg-background flex flex-col">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/80 dark:bg-zinc-900/80 backdrop-blur border-b border-gray-200 dark:border-zinc-800 px-4 sm:px-8 py-4 flex items-center gap-4 rounded-t-xl">
+      <div className="sticky top-0 z-10 bg-background/90 backdrop-blur border-b px-4 pr-14 sm:px-8 sm:pr-16 py-4 flex flex-wrap items-center gap-3">
         <img src={faviconUrl} alt="" className="w-8 h-8 rounded" />
         <div className="flex-1 min-w-0">
-          <div className="truncate font-semibold text-lg text-gray-900 dark:text-white">
+          <div className="truncate font-semibold text-lg text-foreground">
             {pageTitle}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+          <div className="text-xs text-muted-foreground truncate">
             Last analyzed: {fetchTime ? new Date(fetchTime).toLocaleString() : 'N/A'} • Device: {device.charAt(0).toUpperCase()+device.slice(1)}
           </div>
         </div>
@@ -163,29 +164,33 @@ export function PageSpeedInsightsModal({ websiteId, url }: PageSpeedInsightsModa
           href={reportLink}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+          className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          Full Report
+          Full report
         </a>
         <button
-          onClick={() => navigator.clipboard.writeText(reportLink)}
-          className="text-xs px-3 py-1 bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-zinc-600 transition"
+          onClick={() =>
+            navigator.clipboard
+              .writeText(reportLink)
+              .then(() => toast.success('Link copied'), () => toast.error('Could not copy the link'))
+          }
+          className="inline-flex h-9 items-center rounded-md border bg-background px-3 text-xs font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          Copy Link
+          Copy link
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-8">
         {/* Strategy selector */}
         <div>
-          <label htmlFor="strategy" className="text-xs text-gray-500 mr-2">
+          <label htmlFor="strategy" className="mr-2 text-xs text-muted-foreground">
             Strategy:
           </label>
           <select
             id="strategy"
             value={strategy}
             onChange={e => setStrategy(e.target.value as 'desktop' | 'mobile')}
-            className="text-sm border rounded px-2 py-1"
+            className="h-9 rounded-md border bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="desktop">Desktop</option>
             <option value="mobile">Mobile</option>
@@ -194,8 +199,8 @@ export function PageSpeedInsightsModal({ websiteId, url }: PageSpeedInsightsModa
 
         {/* Scorecard */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow p-6 flex flex-col gap-6 border border-gray-100 dark:border-zinc-800">
-            <h3 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
+          <div className="bg-card rounded-xl p-6 flex flex-col gap-6 border">
+            <h3 className="text-xl font-bold mb-2 text-foreground">
               Overall Health Scorecard
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -206,7 +211,7 @@ export function PageSpeedInsightsModal({ websiteId, url }: PageSpeedInsightsModa
                 { label: 'Best Practices', key: bp },
               ].map(({ label, key }) => (
                 <div key={label} className="flex flex-col items-center">
-                  <span className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                  <span className="text-xs text-muted-foreground mb-1">
                     {label}
                   </span>
                   <span
@@ -216,26 +221,26 @@ export function PageSpeedInsightsModal({ websiteId, url }: PageSpeedInsightsModa
                   >
                     {key?.score != null ? Math.round(key.score * 100) : 'N/A'}
                   </span>
-                  <span className="text-xs text-gray-400">Good: 90-100</span>
+                  <span className="text-xs text-muted-foreground">Good: 90-100</span>
                 </div>
               ))}
             </div>
           </div>
           {screenshot && (
-            <div className="bg-white dark:bg-zinc-900 rounded-xl shadow p-6 flex flex-col items-center border border-gray-100 dark:border-zinc-800">
+            <div className="bg-card rounded-xl p-6 flex flex-col items-center border">
               <img
                 src={screenshot}
                 alt="Website Screenshot"
-                className="rounded-lg border shadow max-w-full max-h-60 mb-2"
+                className="rounded-lg border max-w-full max-h-60 mb-2"
               />
-              <span className="text-xs text-gray-400">Website Screenshot</span>
+              <span className="text-xs text-muted-foreground">Website Screenshot</span>
             </div>
           )}
         </div>
 
         {/* Core Web Vitals */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow p-6 border border-gray-100 dark:border-zinc-800">
-          <h4 className="font-semibold text-lg mb-4 text-gray-900 dark:text-white">
+        <div className="bg-card rounded-xl p-6 border">
+          <h4 className="font-semibold text-lg mb-4 text-foreground">
             Core Web Vitals Status
           </h4>
           {cwv ? (
@@ -243,7 +248,7 @@ export function PageSpeedInsightsModal({ websiteId, url }: PageSpeedInsightsModa
               {Object.entries(cwv).map(([key, metric]) => (
                 metric && (
                   <div key={key} className="flex flex-col items-center gap-1">
-                    <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium">
+                    <span className="text-xs text-muted-foreground mb-1 font-medium">
                       {key}
                     </span>
                     <span className={`text-2xl font-bold ${getStatusColor(String(metric.category))}`}>
@@ -253,7 +258,7 @@ export function PageSpeedInsightsModal({ websiteId, url }: PageSpeedInsightsModa
                           : (metric.percentile / 1000).toFixed(2) + 's')
                         : 'N/A'}
                     </span>
-                    <span className="text-xs text-gray-400 capitalize">
+                    <span className="text-xs text-muted-foreground capitalize">
                       {metric.category?.replace('_', ' ').toLowerCase() || ''}
                     </span>
                   </div>
@@ -261,11 +266,11 @@ export function PageSpeedInsightsModal({ websiteId, url }: PageSpeedInsightsModa
               ))}
             </div>
           ) : (
-            <div className="text-xs text-gray-400">
+            <div className="text-xs text-muted-foreground">
               Loading experience metrics are unavailable.
             </div>
           )}
-          <div className="text-xs text-gray-400 mt-1">
+          <div className="text-xs text-muted-foreground mt-1">
             Overall:{' '}
             <span className={getStatusColor(String(cwvStatus))}>
               {String(cwvStatus).replace('_', ' ').toLowerCase()}
@@ -274,8 +279,8 @@ export function PageSpeedInsightsModal({ websiteId, url }: PageSpeedInsightsModa
         </div>
 
         {/* Lab Metrics */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow p-6 border border-gray-100 dark:border-zinc-800">
-          <h4 className="font-semibold text-lg mb-4 text-gray-900 dark:text-white">
+        <div className="bg-card rounded-xl p-6 border">
+          <h4 className="font-semibold text-lg mb-4 text-foreground">
             Key Lab Performance Metrics
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
@@ -290,22 +295,22 @@ export function PageSpeedInsightsModal({ websiteId, url }: PageSpeedInsightsModa
               return (
                 <div
                   key={key}
-                  className="flex flex-col gap-1 items-center bg-gray-50 dark:bg-zinc-800 rounded-lg p-4 shadow-sm border border-gray-100 dark:border-zinc-700"
+                  className="flex flex-col gap-1 items-center bg-muted rounded-lg p-4 border"
                 >
-                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                  <span className="text-xs text-muted-foreground font-medium">
                     {label}
                   </span>
                   <span className={`text-xl font-bold ${getScoreColor(metric?.score ? Math.round(metric.score * 100) : null)}`}>
                     {value || 'N/A'}
                   </span>
-                  <span className="text-xs text-gray-400">Good: {good}</span>
+                  <span className="text-xs text-muted-foreground">Good: {good}</span>
                 </div>
               );
             })}
           </div>
         </div>
 
-        <div className="text-xs text-gray-400 text-center pt-2">
+        <div className="text-xs text-muted-foreground text-center pt-2">
           Powered by Google PageSpeed Insights
         </div>
       </div>
