@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Request, Response } from "express";
+import { mockDb } from "./helpers/mockDb";
 
 function query<T>(result: T) {
   const q: any = { sort: () => q, lean: async () => result };
@@ -14,9 +15,7 @@ const AlertChannel = {
   create: mock(async (doc: any) => ({ toObject: () => ({ _id: "c1", ...doc }) })),
   deleteOne: mock(async (..._a: any[]) => ({})),
 };
-// bun's mock.module is process-wide, so stub every model the import graph
-// touches (utils/websites imports Website) to keep other test files loadable.
-mock.module("db/client", () => ({ AlertChannel, Website: {}, WebsiteTick: {}, Incident: {} }));
+mockDb({ AlertChannel });
 
 const { createAlertChannel, updateAlertChannel, deleteAlertChannel } = await import(
   "../controllers/alertChannelController"

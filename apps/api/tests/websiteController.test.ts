@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Request, Response } from "express";
+import { mockDb } from "./helpers/mockDb";
 
 // Chainable Mongoose query stub; controllers await the terminal `.lean()`.
 function query<T>(result: T) {
@@ -24,7 +25,7 @@ const WebsiteTick = {
   find: mock((_filter: any) => query<any[]>([])),
 };
 
-mock.module("db/client", () => ({ Website, WebsiteTick }));
+mockDb({ Website, WebsiteTick });
 
 const { getAllWebsites, disableWebsite, createWebsite, updateWebsite, RECENT_TICKS_WINDOW_MS } =
   await import(

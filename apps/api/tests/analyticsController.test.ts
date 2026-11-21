@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Request, Response } from "express";
+import { mockDb } from "./helpers/mockDb";
 
 // A minimal chainable Mongoose query stub: select/sort/limit return `this`, and
 // `lean()` resolves to the preconfigured result. Controllers only ever await
@@ -26,7 +27,7 @@ const Incident = {
   countDocuments: mock(async () => 0),
 };
 
-mock.module("db/client", () => ({ Website, WebsiteTick, Incident }));
+mockDb({ Website, WebsiteTick, Incident });
 
 // Well-formed ObjectId strings (the controllers reject malformed ids with a 400).
 const W1 = "65a000000000000000000001";
