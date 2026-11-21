@@ -1,96 +1,194 @@
-# 🌐 UptimeWatch
+# UptimeWatch
 
-**UptimeWatch** is a full-stack **uptime & API monitoring platform**. Add websites, APIs and cron jobs; UptimeWatch checks them on a schedule, records response time and failures, alerts you where you work, and publishes a status page for your users.
+UptimeWatch is a full-stack uptime and API monitoring platform inspired by services like Datadog and UptimeRobot. Monitor websites and APIs, track availability and response times, analyze historical performance, and receive email alerts whenever a service goes down or recovers.
 
----
+## Features
 
-## 🚀 Features
+- **Uptime Monitoring**
+  - Automatically checks websites and APIs every minute.
+  - Supports both websites and REST API endpoints.
 
-- 🔍 **HTTP monitoring** – Checks every 1 min to 24 h with custom method, timeout, expected status codes (`200-299,301`), required keyword, and safe redirect following.
-- 💓 **Heartbeat monitoring** – Cron jobs and backups ping a secret URL; you're alerted when a ping is overdue.
-- 🧠 **No false alarms** – Incidents open only after N consecutive failures, and every failure is classified (DNS, timeout, connection, TLS, HTTP status, keyword, missed heartbeat).
-- 🚨 **Alerts** – Email, Slack, Discord and generic webhooks, with test-send and retries. Falls back to your account email.
-- 🔐 **SSL expiry warnings** – At 30, 14, 7 and 1 days before a certificate expires.
-- 🌍 **Public status pages** – `/status/<slug>` with 90-day uptime bars, recent incidents and an embeddable SVG badge.
-- 🛠️ **Maintenance windows** – Suspend checks and alerts for planned work; status pages show "under maintenance".
-- 📊 **Analytics** – Uptime and p50/p95/p99 latency over 24 h, 7 d and 30 d, plus on-demand PageSpeed Insights.
-- 🌓 **Dark/light UI** – Next.js + Tailwind + shadcn/ui.
+- **Performance Analytics**
+  - Track uptime percentage.
+  - Monitor response times.
+  - View complete check history and status trends.
 
----
+- **Instant Email Notifications**
+  - Receive alerts when a monitored service becomes unavailable.
+  - Get notified again once the service has recovered.
 
-## 🛠️ Tech Stack
+- **PageSpeed Insights**
+  - Generate on-demand performance reports for monitored websites.
 
-| Layer      | Tech                                                   |
-|------------|--------------------------------------------------------|
-| Frontend   | Next.js (App Router), React, TanStack Query, Tailwind, shadcn/ui |
-| Backend    | Express 5 on Bun, zod validation, helmet, rate limiting |
-| Database   | MongoDB, Mongoose                                      |
-| Auth       | Clerk (JWTs verified via JWKS)                         |
-| Jobs       | node-cron with Mongo leases (single runner per job)    |
-| Email      | Resend                                                 |
-| Monorepo   | Turborepo, Bun workspaces                              |
+- **Authentication**
+  - Secure email authentication powered by Clerk.
+
+- **Modern Dashboard**
+  - Responsive interface built with Next.js and Tailwind CSS.
+  - Supports both light and dark themes.
 
 ---
 
-## 📦 Monorepo Structure
+## How It Works
 
-```
+1. Sign in using Clerk authentication.
+2. Add a website or API endpoint to monitor.
+3. The monitoring service checks each endpoint every minute using scheduled cron jobs.
+4. Each check records:
+   - Availability status
+   - HTTP response time
+   - Timestamp
+5. View uptime statistics, response time history, and monitoring logs from the dashboard.
+6. Receive automatic email notifications whenever a service goes down or comes back online.
+
+---
+
+## Tech Stack
+
+| Layer | Technologies |
+|--------|--------------|
+| Frontend | Next.js, React, Tailwind CSS, TypeScript |
+| Backend | Node.js, Express, Bun |
+| Database | MongoDB, Mongoose |
+| Authentication | Clerk |
+| Monitoring | Axios, node-cron |
+| Email Service | Resend |
+| Monorepo | Turborepo |
+
+---
+
+## Project Structure
+
+```text
 apps/
-├── api/            # Express API, background jobs and worker
-│   ├── app.ts      #   HTTP app (routes, middleware)
-│   ├── index.ts    #   API server (also runs jobs unless RUN_SCHEDULERS=false)
-│   ├── worker.ts   #   standalone background worker
-│   ├── monitor/    #   check engine: HTTP checks, heartbeats, SSL, transitions, alerts
-│   ├── notify/     #   alert channels and delivery
-│   ├── jobs/       #   scheduler + Mongo leases
-│   └── tests/      #   bun test suites
-└── frontend/       # Next.js dashboard, public status pages, landing page
+├── api/                  # Express API, monitoring service, cron jobs, email notifications
+└── frontend/             # Next.js dashboard
 
 packages/
-├── db/             # Mongoose models (db/client) and shared constants (db/constants)
-├── ui/, eslint-config/, typescript-config/
+├── db/                   # Database models and connection
+├── ui/                   # Shared UI components
+├── eslint-config/
+└── typescript-config/
 ```
 
 ---
 
-## ⚙️ Local Development
+## Getting Started
 
-Prerequisites: **Bun**, **MongoDB** (local or Atlas), a **Clerk** app, and optionally a **Resend** key and a Google **PageSpeed Insights** key.
+### Prerequisites
+
+Before running the project, make sure you have:
+
+- Bun
+- MongoDB (local instance or MongoDB Atlas)
+- Clerk application
+- Resend API key
+
+### Installation
 
 ```bash
+git clone <repository-url>
+
+cd uptimewatch
+
 bun install
-
-cp apps/api/.env.example apps/api/.env              # MONGODB_URI, CLERK_ISSUER, ...
-cp apps/frontend/.env.example apps/frontend/.env.local  # API URL + Clerk keys
-
-bun run dev
 ```
 
-- API: **http://localhost:8080** (health check at `/health`)
-- Frontend: **http://localhost:3000**
+### Environment Variables
+
+Copy the example environment files and configure them.
+
+#### API
+
+```bash
+cp apps/api/.env.example apps/api/.env
+```
+
+Configure:
+
+```env
+MONGODB_URI=
+CLERK_ISSUER=
+RESEND_API_KEY=
+```
 
 The API only trusts tokens from `CLERK_ISSUER` (or, if unset, the issuer encoded in `CLERK_PUBLISHABLE_KEY`). With neither set, every request is rejected.
 
-### Checks
+#### Database Package
 
 ```bash
-bun run check-types           # type-check every workspace
-bun run --cwd apps/api test   # API test suite
-bun run --cwd apps/frontend lint
+cp packages/db/.env.example packages/db/.env
 ```
 
-CI runs the same steps on every push and pull request.
+Configure:
+
+```env
+MONGODB_URI=
+```
+
+#### Frontend
+
+Create a `.env.local` file inside `apps/frontend` and configure:
+
+```env
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+NEXT_PUBLIC_API_BACKEND_URL=http://localhost:8080
+```
 
 ---
 
-## 🚢 Deployment notes
+## Running the Project
 
-- **Background jobs** run inside the API by default. To scale separately, run `bun run --cwd apps/api worker` and set `RUN_SCHEDULERS=false` on API instances. Each job takes a Mongo lease, so running several instances is safe.
-- Set `FRONTEND_URL` (CORS), `TRUST_PROXY=1` behind a load balancer, and `EMAIL_NOTIFICATIONS_ENABLED=true` with a verified `EMAIL_FROM` to send email.
-- Raw check results expire after 90 days and notifications after 30 (TTL indexes).
+Start both the frontend and backend.
 
-See `apps/api/.env.example` for every setting.
+```bash
+bun run dev
+```
+
+### Default Ports
+
+| Service | URL |
+|----------|-----|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8080 |
 
 ---
 
-**Monitor. Analyze. Stay online.**
+## Monitoring Workflow
+
+```
+User
+  │
+  ▼
+Add Website/API
+  │
+  ▼
+Cron Job (Every Minute)
+  │
+  ▼
+HTTP Request (Axios)
+  │
+  ├── Success
+  │      └── Save latency & status
+  │
+  └── Failure
+         ├── Save downtime
+         └── Send email notification
+```
+
+---
+
+## Future Improvements
+
+- Multiple monitoring regions
+- Slack and Discord notifications
+- SMS alerts
+- Status pages
+- Custom monitoring intervals
+- SSL certificate monitoring
+- Webhook integrations
+- Team workspaces
+- Public status dashboards
+
+---
