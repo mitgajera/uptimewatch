@@ -15,7 +15,7 @@ import { MonitorFormDialog } from "@/components/monitors/monitor-form-dialog";
 type Filter = "all" | MonitorState;
 
 // Down first so problems are seen immediately, then by name.
-const ORDER: Record<MonitorState, number> = { down: 0, pending: 1, up: 2, paused: 3 };
+const ORDER: Record<MonitorState, number> = { down: 0, pending: 1, maintenance: 2, up: 3, paused: 4 };
 
 function SummaryCard({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
@@ -36,7 +36,7 @@ export default function MonitorsPage() {
   const stats = useDashboardStats();
 
   const counts = useMemo(() => {
-    const c: Record<Filter, number> = { all: 0, up: 0, down: 0, paused: 0, pending: 0 };
+    const c: Record<Filter, number> = { all: 0, up: 0, down: 0, maintenance: 0, paused: 0, pending: 0 };
     for (const m of monitors.data ?? []) {
       c.all++;
       c[monitorState(m)]++;

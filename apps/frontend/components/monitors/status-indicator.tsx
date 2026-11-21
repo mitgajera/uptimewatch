@@ -4,6 +4,7 @@ import { STATE_LABEL, type MonitorState } from "@/lib/monitor-format";
 const DOT: Record<MonitorState, string> = {
   up: "bg-success",
   down: "bg-destructive",
+  maintenance: "bg-foreground/60",
   paused: "bg-muted-foreground",
   pending: "bg-warning",
 };
@@ -11,6 +12,7 @@ const DOT: Record<MonitorState, string> = {
 const TEXT: Record<MonitorState, string> = {
   up: "text-success",
   down: "text-destructive",
+  maintenance: "text-foreground",
   paused: "text-muted-foreground",
   pending: "text-warning",
 };

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, CheckCircle2, HelpCircle, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, HelpCircle, Wrench, XCircle } from "lucide-react";
 import { API_BACKEND_URL } from "@/config";
 import type { PublicMonitorStatus, PublicPageStatus, PublicStatusPage } from "@/lib/api/types";
 import { formatDuration, formatUptime } from "@/lib/monitor-format";
@@ -34,6 +34,11 @@ const BANNER: Record<PublicPageStatus, { text: string; icon: typeof CheckCircle2
     icon: CheckCircle2,
     className: "border-success/40 bg-success/10 text-success",
   },
+  maintenance: {
+    text: "Scheduled maintenance in progress",
+    icon: Wrench,
+    className: "border-border bg-secondary text-foreground",
+  },
   partial_outage: {
     text: "Some systems are down",
     icon: AlertTriangle,
@@ -54,6 +59,7 @@ const BANNER: Record<PublicPageStatus, { text: string; icon: typeof CheckCircle2
 const MONITOR_LABEL: Record<PublicMonitorStatus, { text: string; className: string }> = {
   up: { text: "Operational", className: "text-success" },
   down: { text: "Down", className: "text-destructive" },
+  maintenance: { text: "Under maintenance", className: "text-foreground" },
   paused: { text: "Paused", className: "text-muted-foreground" },
   unknown: { text: "No data", className: "text-muted-foreground" },
 };

@@ -54,6 +54,7 @@ export interface Monitor extends MonitorConfig {
   sslIssuer?: string | null;
   heartbeatToken?: string | null;
   lastHeartbeatAt?: string | null;
+  maintenanceUntil?: string | null;
   createdAt: string;
   /** Ticks from the last 30 minutes, newest first (list endpoints only). */
   websiteTicks: Tick[];
@@ -117,8 +118,8 @@ export interface StatusPage {
   updatedAt: string;
 }
 
-export type PublicMonitorStatus = "up" | "down" | "paused" | "unknown";
-export type PublicPageStatus = "operational" | "partial_outage" | "major_outage" | "unknown";
+export type PublicMonitorStatus = "up" | "down" | "maintenance" | "paused" | "unknown";
+export type PublicPageStatus = "operational" | "maintenance" | "partial_outage" | "major_outage" | "unknown";
 
 export interface PublicStatusPage {
   title: string;

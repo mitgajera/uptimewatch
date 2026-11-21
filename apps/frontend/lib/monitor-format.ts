@@ -1,10 +1,14 @@
 import type { CheckErrorType, Monitor } from "@/lib/api/types";
 
-export type MonitorState = "up" | "down" | "paused" | "pending";
+export type MonitorState = "up" | "down" | "maintenance" | "paused" | "pending";
 
 /** Current state of a monitor as shown in the UI. */
-export function monitorState(m: Pick<Monitor, "paused" | "isDown" | "lastCheckedAt" | "websiteTicks">): MonitorState {
+export function monitorState(
+  m: Pick<Monitor, "paused" | "isDown" | "lastCheckedAt" | "websiteTicks" | "maintenanceUntil">,
+  now = Date.now()
+): MonitorState {
   if (m.paused) return "paused";
+  if (m.maintenanceUntil && new Date(m.maintenanceUntil).getTime() > now) return "maintenance";
   if (m.isDown) return "down";
   if (!m.lastCheckedAt && !(m.websiteTicks?.length > 0)) return "pending";
   return "up";
@@ -13,6 +17,7 @@ export function monitorState(m: Pick<Monitor, "paused" | "isDown" | "lastChecked
 export const STATE_LABEL: Record<MonitorState, string> = {
   up: "Up",
   down: "Down",
+  maintenance: "Maintenance",
   paused: "Paused",
   pending: "Pending",
 };
