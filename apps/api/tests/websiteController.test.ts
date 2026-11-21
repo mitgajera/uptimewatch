@@ -212,6 +212,27 @@ describe("createWebsite", () => {
   });
 });
 
+describe("createWebsite (heartbeat)", () => {
+  test("creates a heartbeat without a URL and issues a ping token", async () => {
+    const res = mockRes();
+    await createWebsite(
+      mockReq({ body: { type: "heartbeat", name: "Nightly backup", intervalSeconds: 86400 } }),
+      res
+    );
+    expect(res.statusCode).toBe(201);
+    const doc = Website.create.mock.calls[0]![0];
+    expect(doc).toMatchObject({ type: "heartbeat", url: "", intervalSeconds: 86400 });
+    expect(doc.heartbeatToken).toMatch(/^[A-Za-z0-9_-]{27}$/);
+  });
+
+  test("still requires a URL for HTTP monitors", async () => {
+    const res = mockRes();
+    await createWebsite(mockReq({ body: { name: "No URL" } }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.message).toContain("url");
+  });
+});
+
 describe("updateWebsite", () => {
   test("applies a partial update scoped to the user", async () => {
     Website.findOneAndUpdate.mockReturnValue(query({ _id: ID, url: PUBLIC_URL, paused: true }));

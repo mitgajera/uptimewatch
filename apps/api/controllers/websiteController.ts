@@ -4,6 +4,7 @@ import { findUserWebsiteOr404, isValidId } from "../utils/websites";
 import { assertSafeUrl, UnsafeUrlError } from "../utils/ssrf";
 import { MONITOR_DEFAULTS } from "db/constants";
 import { uptimePercent } from "../utils/stats";
+import { generateHeartbeatToken } from "../monitor/heartbeat";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 import { createMonitorSchema, parseBody, updateMonitorSchema } from "../validation";
@@ -46,9 +47,10 @@ export const createWebsite = async (req: Request, res: Response) => {
   const body = parseBody(createMonitorSchema, req, res);
   if (!body) return;
 
-  // The server fetches this URL on a schedule, so it must not target
-  // private/internal hosts (SSRF).
-  if (!(await ensureSafeUrl(body.url, res))) return;
+  const isHeartbeat = body.type === "heartbeat";
+  // The server fetches HTTP monitor URLs on a schedule, so they must not
+  // target private/internal hosts (SSRF).
+  if (!isHeartbeat && !(await ensureSafeUrl(body.url!, res))) return;
 
   const count = await Website.countDocuments({ userId, disabled: false });
   if (count >= MAX_MONITORS_PER_USER) {
@@ -56,7 +58,12 @@ export const createWebsite = async (req: Request, res: Response) => {
     return;
   }
 
-  const website = await Website.create({ ...body, userId, disabled: false });
+  const website = await Website.create({
+    ...body,
+    ...(isHeartbeat ? { url: "", heartbeatToken: generateHeartbeatToken() } : {}),
+    userId,
+    disabled: false,
+  });
   res.status(201).json({ id: website._id });
 };
 
@@ -105,6 +112,25 @@ export const updateWebsite = async (req: Request, res: Response) => {
 export const RECENT_TICKS_WINDOW_MS = 30 * 60 * 1000;
 
 const recentSince = () => new Date(Date.now() - RECENT_TICKS_WINDOW_MS);
+
+// issue a new ping URL for a heartbeat monitor (e.g. after a leak)
+export const rotateHeartbeatToken = async (req: Request, res: Response) => {
+  const websiteId = req.params.websiteId;
+  if (!isValidId(websiteId)) {
+    res.status(400).json({ error: "Invalid website id." });
+    return;
+  }
+  const website = await Website.findOneAndUpdate(
+    { _id: websiteId, userId: req.userId!, disabled: false, type: "heartbeat" },
+    { $set: { heartbeatToken: generateHeartbeatToken() } },
+    { new: true }
+  ).lean();
+  if (!website) {
+    res.status(404).json({ error: "Heartbeat monitor not found." });
+    return;
+  }
+  res.json({ heartbeatToken: website.heartbeatToken });
+};
 
 // get a single monitor's configuration, current state and recent ticks
 export const getWebsite = async (req: Request, res: Response) => {

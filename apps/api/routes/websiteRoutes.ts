@@ -6,6 +6,7 @@ import {
   disableWebsite,
   getWebsite,
   updateWebsite,
+  rotateHeartbeatToken,
 } from "../controllers/websiteController";
 import {
   getDashboardStats,
@@ -22,6 +23,7 @@ router.get("/websites", getAllWebsites);
 router.get("/website/:websiteId", getWebsite);
 router.patch("/website/:websiteId", updateWebsite);
 router.delete("/website/:websiteId", disableWebsite);
+router.post("/website/:websiteId/heartbeat-token", rotateHeartbeatToken);
 
 // Analytics & incidents
 router.get("/stats", getDashboardStats);

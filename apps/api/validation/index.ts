@@ -22,13 +22,18 @@ const monitorFields = {
   followRedirects: z.boolean(),
   failureThreshold: z.number().int().min(1).max(10),
   paused: z.boolean(),
+  graceSeconds: z.number().int().min(0).max(86_400),
 };
 
 export const createMonitorSchema = z
-  .object(monitorFields)
+  .object({ ...monitorFields, type: z.enum(["http", "heartbeat"]) })
   .partial()
-  .required({ url: true })
-  .strict();
+  .strict()
+  // Heartbeats are pinged by the user's job, so only HTTP monitors need a URL.
+  .refine((m) => m.type === "heartbeat" || Boolean(m.url), {
+    path: ["url"],
+    message: "URL is required",
+  });
 
 export const updateMonitorSchema = z.object(monitorFields).partial().strict();
 
