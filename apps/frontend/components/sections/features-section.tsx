@@ -59,7 +59,7 @@ export function FeaturesSection() {
     {
       title: "Checks every minute",
       description:
-        "HTTP checks from 1 minute to 1 hour, with custom methods, expected status codes, timeouts and keyword matching.",
+        "HTTP checks from every minute to once a day, with custom methods, expected status codes, timeouts and keyword matching.",
       icon: <Activity className="h-6 w-6 text-primary" aria-hidden="true" />,
     },
     {
