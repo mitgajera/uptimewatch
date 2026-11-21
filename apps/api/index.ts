@@ -1,6 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
-import { connectDB } from "db/client";
+import { connectDB, mongoose } from "db/client";
 import { authMiddleware } from "./middleware/middleware";
 import websiteRoutes from "./routes/websiteRoutes";
 import userRoutes from "./routes/userRoutes";
@@ -27,6 +27,12 @@ app.use(
     credentials: true,
   })
 );
+
+// Liveness/readiness probe for load balancers and uptime checks (no auth).
+app.get("/health", (_req: Request, res: Response) => {
+  const dbReady = mongoose.connection.readyState === 1;
+  res.status(dbReady ? 200 : 503).json({ status: dbReady ? "ok" : "degraded", db: dbReady });
+});
 
 // Routes
 app.use("/api/v1", authMiddleware, websiteRoutes);
@@ -60,8 +66,9 @@ async function start() {
   scheduleSslCheck();
   console.log("started cron jobs");
 
-  app.listen(8080, () => {
-    console.log("Server running on port 8080");
+  const port = Number(process.env.PORT) || 8080;
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
   });
 }
 
