@@ -122,7 +122,7 @@ export function WebsiteCard({ website, onDelete }: WebsiteCardProps) {
               <DialogHeader>
                 <DialogTitle className="pt-2 pl-2">PageSpeed Insights</DialogTitle>
               </DialogHeader>
-              <PageSpeedInsightsModal url={website.url} />
+              <PageSpeedInsightsModal websiteId={website.id} url={website.url} />
             </DialogContent>
           </Dialog>
           <button

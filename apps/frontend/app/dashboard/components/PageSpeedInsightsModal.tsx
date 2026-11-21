@@ -1,7 +1,10 @@
 /* eslint-disable @next/next/no-img-element */
 import React, { useEffect, useState, useCallback } from 'react';
+import { useApiClient } from '@/hooks/useApiClient';
+import { apiErrorMessage } from '@/lib/api/errors';
 
 interface PageSpeedInsightsModalProps {
+  websiteId: string;
   url: string;
 }
 
@@ -64,7 +67,8 @@ interface PageSpeedApiResponse {
   };
 }
 
-export function PageSpeedInsightsModal({ url }: PageSpeedInsightsModalProps) {
+export function PageSpeedInsightsModal({ websiteId, url }: PageSpeedInsightsModalProps) {
+  const api = useApiClient();
   const [strategy, setStrategy] = useState<'desktop'|'mobile'>('desktop');
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string|null>(null);
@@ -72,36 +76,19 @@ export function PageSpeedInsightsModal({ url }: PageSpeedInsightsModalProps) {
 
   const reportLink = `https://pagespeed.web.dev/analysis?url=${encodeURIComponent(url)}&strategy=${strategy}`;
 
-  // fetch data
+  // Fetched through our API so the PageSpeed key never reaches the browser.
   const fetchData = useCallback(() => {
-    if (!url) return;
     setLoading(true);
     setError(null);
     setData(null);
-    const key = process.env.NEXT_PUBLIC_PSI_API_KEY;
-    if (!key) {
-      setError('API key not found');
-      setLoading(false);
-      return;
-    }
-    const CATEGORIES = [
-      'performance',
-      'accessibility',
-      'best-practices',
-      'seo',
-    ].map(cat => `category=${cat}`).join('&');
-    fetch(
-      `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?` +
-        `url=${encodeURIComponent(url)}` +
-        `&key=${key}` +
-        `&strategy=${strategy}` +
-        `&${CATEGORIES}`
-    )
-      .then(r => (r.ok ? r.json() : Promise.reject(r.statusText)))
-      .then(json => setData(json as PageSpeedApiResponse))
-      .catch(err => setError(String(err)))
+    api
+      .get<PageSpeedApiResponse>(`/website/${websiteId}/pagespeed?strategy=${strategy}`, {
+        timeout: 90_000,
+      })
+      .then(res => setData(res.data))
+      .catch(err => setError(apiErrorMessage(err, 'Could not run PageSpeed Insights.')))
       .finally(() => setLoading(false));
-  }, [url, strategy]);
+  }, [api, websiteId, strategy]);
 
   useEffect(() => {
     fetchData();
