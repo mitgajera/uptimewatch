@@ -26,12 +26,28 @@ const JOBS: Job[] = [
  */
 export function startScheduledJobs() {
   for (const job of JOBS) {
+    const lease = `job:${job.name}`;
+    let running = false;
     cron.schedule(job.schedule, async () => {
+      // This process still owns the lease during a long run, so guard locally too.
+      if (running) return;
+      let renew: ReturnType<typeof setInterval> | undefined;
       try {
-        if (!(await acquireLease(Lease, `job:${job.name}`, job.leaseMs))) return;
+        if (!(await acquireLease(Lease, lease, job.leaseMs))) return;
+        running = true;
+        // Keep the lease while the run lasts, so a slow run can't be taken
+        // over and executed a second time by another instance.
+        renew = setInterval(() => {
+          acquireLease(Lease, lease, job.leaseMs).catch((err) =>
+            console.error(`[JOBS] ${job.name} lease renewal failed:`, err instanceof Error ? err.message : err)
+          );
+        }, job.leaseMs / 3);
         await job.run();
       } catch (err) {
         console.error(`[JOBS] ${job.name} failed:`, err instanceof Error ? err.message : err);
+      } finally {
+        clearInterval(renew);
+        running = false;
       }
     });
   }
