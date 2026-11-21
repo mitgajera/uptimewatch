@@ -1,6 +1,7 @@
 // Shapes returned by the UptimeWatch API (/api/v1).
 
 export type MonitorMethod = "GET" | "HEAD" | "POST";
+export type MonitorType = "http" | "heartbeat";
 
 export type CheckErrorType =
   | "DNS"
@@ -10,11 +11,13 @@ export type CheckErrorType =
   | "HTTP_STATUS"
   | "KEYWORD"
   | "BLOCKED"
+  | "MISSED"
   | "UNKNOWN";
 
-export const MONITOR_INTERVALS = [60, 120, 300, 600, 900, 1800, 3600] as const;
+export const MONITOR_INTERVALS = [60, 120, 300, 600, 900, 1800, 3600, 21600, 43200, 86400] as const;
 
 export interface MonitorConfig {
+  type: MonitorType;
   name: string;
   url: string;
   method: MonitorMethod;
@@ -25,6 +28,7 @@ export interface MonitorConfig {
   followRedirects: boolean;
   failureThreshold: number;
   paused: boolean;
+  graceSeconds: number;
 }
 
 export interface Tick {
@@ -48,6 +52,8 @@ export interface Monitor extends MonitorConfig {
   lastErrorType?: CheckErrorType | null;
   sslExpiresAt?: string | null;
   sslIssuer?: string | null;
+  heartbeatToken?: string | null;
+  lastHeartbeatAt?: string | null;
   createdAt: string;
   /** Ticks from the last 30 minutes, newest first (list endpoints only). */
   websiteTicks: Tick[];

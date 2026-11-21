@@ -25,6 +25,7 @@ const ERROR_LABELS: Record<CheckErrorType, string> = {
   HTTP_STATUS: "Unexpected status code",
   KEYWORD: "Keyword not found",
   BLOCKED: "Blocked address",
+  MISSED: "Heartbeat missed",
   UNKNOWN: "Unknown error",
 };
 
@@ -35,6 +36,7 @@ export function errorLabel(type: CheckErrorType | null | undefined): string {
 export function formatInterval(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
   if (seconds < 3600) return `${seconds / 60} min`;
+  if (seconds === 86400) return "day";
   return `${seconds / 3600} h`;
 }
 
@@ -72,6 +74,7 @@ export function timeAgo(date: string | Date | null | undefined, now = Date.now()
 }
 
 export function hostnameOf(url: string): string {
+  if (!url) return "";
   try {
     return new URL(url).hostname;
   } catch {
@@ -80,7 +83,12 @@ export function hostnameOf(url: string): string {
 }
 
 export function displayName(m: Pick<Monitor, "name" | "url">): string {
-  return m.name?.trim() || hostnameOf(m.url);
+  return m.name?.trim() || hostnameOf(m.url) || "Heartbeat";
+}
+
+/** Public ping URL for a heartbeat monitor. */
+export function heartbeatUrl(apiBase: string | undefined, token: string | null | undefined): string {
+  return token ? `${apiBase ?? ""}/api/v1/public/heartbeat/${token}` : "";
 }
 
 export type TickBucket = "up" | "down" | "none";
