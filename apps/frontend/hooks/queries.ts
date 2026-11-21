@@ -93,10 +93,15 @@ export function useUpdateMonitor(id: string) {
   const api = useApiClient();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: Partial<MonitorConfig> & { maintenanceUntil?: string | null }) =>
-      (await api.patch<Monitor>(`/website/${id}`, input)).data,
+    mutationFn: async (
+      input: Partial<MonitorConfig> & { maintenanceUntil?: null; maintenanceMinutes?: number }
+    ) => (await api.patch<Monitor>(`/website/${id}`, input)).data,
     onSuccess: (monitor) => {
-      qc.setQueryData(queryKeys.monitor(id), (old: Monitor | undefined) => ({ ...old, ...monitor }));
+      // The PATCH response has no recent checks; keep the cached ones, then refetch.
+      qc.setQueryData(queryKeys.monitor(id), (old: Monitor | undefined) =>
+        old ? { ...old, ...monitor, websiteTicks: old.websiteTicks } : old
+      );
+      qc.invalidateQueries({ queryKey: queryKeys.monitor(id) });
       qc.invalidateQueries({ queryKey: queryKeys.monitors });
       qc.invalidateQueries({ queryKey: queryKeys.stats });
     },
