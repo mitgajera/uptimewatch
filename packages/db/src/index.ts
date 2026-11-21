@@ -10,6 +10,8 @@ export { Notification } from "./models/Notification";
 export type { INotification, NotificationKind } from "./models/Notification";
 export { AlertChannel } from "./models/AlertChannel";
 export type { IAlertChannel, AlertChannelType } from "./models/AlertChannel";
+export { Lease } from "./models/Lease";
+export type { ILease } from "./models/Lease";
 export { Incident } from "./models/Incident";
 export type { IIncident } from "./models/Incident";
 
