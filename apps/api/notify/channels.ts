@@ -51,6 +51,8 @@ export interface DeliveryDeps {
   post: (url: string, body: unknown) => Promise<unknown>;
   sendEmail: typeof sendEmail;
   assertSafeUrl: typeof assertSafeUrl;
+  /** Deadline for providers without their own timeout (email). */
+  timeoutMs?: number;
 }
 
 const defaultDeps: DeliveryDeps = {
@@ -68,6 +70,14 @@ const defaultDeps: DeliveryDeps = {
   assertSafeUrl,
 };
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Timed out after ${ms / 1000}s`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /** Deliver one alert to one channel. Never throws. */
 export async function deliver(
   channel: ChannelTarget,
@@ -77,11 +87,11 @@ export async function deliver(
   try {
     switch (channel.type) {
       case "email": {
-        const result = await deps.sendEmail({
-          to: channel.target,
-          subject: alert.subject,
-          text: alert.message,
-        });
+        // Same deadline as webhooks, so a stalled provider can't block the batch.
+        const result = await withTimeout(
+          deps.sendEmail({ to: channel.target, subject: alert.subject, text: alert.message }),
+          deps.timeoutMs ?? DELIVERY_TIMEOUT_MS
+        );
         return result.ok ? { ok: true } : { ok: false, error: result.error };
       }
       case "slack":

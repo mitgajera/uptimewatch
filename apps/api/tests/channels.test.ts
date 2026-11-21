@@ -80,4 +80,13 @@ describe("deliver", () => {
       error: "HTTP 404",
     });
   });
+
+  test("times out a stalled email provider instead of hanging", async () => {
+    const result = await deliver(
+      { type: "email", target: "ops@acme.dev" },
+      { kind: "DOWN", subject: "s", message: "m" },
+      deps({ sendEmail: mock(() => new Promise<never>(() => {})), timeoutMs: 20 })
+    );
+    expect(result).toEqual({ ok: false, error: "Timed out after 0.02s" });
+  });
 });
