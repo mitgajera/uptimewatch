@@ -99,8 +99,9 @@ const SERVER_FIELD: Record<string, Field> = {
 function validate(f: FormState): Errors {
   const errors: Errors = {};
   if (f.type === "heartbeat") {
+    // Number("") is 0, so a blank field must be rejected explicitly.
     const grace = Number(f.graceMinutes);
-    if (!Number.isInteger(grace) || grace < 0 || grace > 1440) {
+    if (!f.graceMinutes.trim() || !Number.isInteger(grace) || grace < 0 || grace > 1440) {
       errors.graceMinutes = "Use a whole number of minutes from 0 to 1440";
     }
     if (!f.name.trim()) errors.name = "Name your heartbeat, e.g. Nightly backup";
