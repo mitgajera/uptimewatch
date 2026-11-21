@@ -49,7 +49,13 @@ export const createWebsite = async (req: Request, res: Response) => {
   res.json({ id: website._id });
 };
 
-// get website status (with its ticks)
+// The dashboard only renders the most recent window of ticks per website;
+// longer history is served by the bucketed analytics endpoint.
+export const RECENT_TICKS_WINDOW_MS = 30 * 60 * 1000;
+
+const recentSince = () => new Date(Date.now() - RECENT_TICKS_WINDOW_MS);
+
+// get website status (with its recent ticks)
 export const getWebsiteStatus = async (req: Request, res: Response) => {
   const websiteId = req.query.websiteId as string;
   const userId = req.userId!;
@@ -61,14 +67,17 @@ export const getWebsiteStatus = async (req: Request, res: Response) => {
   });
   if (!website) return;
 
-  const websiteTicks = await WebsiteTick.find({ websiteId: website._id })
+  const websiteTicks = await WebsiteTick.find({
+    websiteId: website._id,
+    createdAt: { $gte: recentSince() },
+  })
     .sort({ createdAt: -1 })
     .lean();
 
   res.json(serializeWebsite(website, websiteTicks));
 };
 
-// get all websites for the logged-in user
+// get all websites for the logged-in user, each with its recent ticks
 export const getAllWebsites = async (req: Request, res: Response) => {
   const userId = req.userId;
 
@@ -77,16 +86,29 @@ export const getAllWebsites = async (req: Request, res: Response) => {
     disabled: false,
   }).lean();
 
-  const websitesWithTicks = await Promise.all(
-    websites.map(async (website) => {
-      const websiteTicks = await WebsiteTick.find({ websiteId: website._id })
+  // One query for every website's recent ticks instead of one per website.
+  const ticks = websites.length
+    ? await WebsiteTick.find({
+        websiteId: { $in: websites.map((w) => w._id) },
+        createdAt: { $gte: recentSince() },
+      })
         .sort({ createdAt: -1 })
-        .lean();
-      return serializeWebsite(website, websiteTicks);
-    })
-  );
+        .lean()
+    : [];
 
-  res.json({ websites: websitesWithTicks });
+  const ticksByWebsite = new Map<string, typeof ticks>();
+  for (const tick of ticks) {
+    const key = String(tick.websiteId);
+    const list = ticksByWebsite.get(key);
+    if (list) list.push(tick);
+    else ticksByWebsite.set(key, [tick]);
+  }
+
+  res.json({
+    websites: websites.map((website) =>
+      serializeWebsite(website, ticksByWebsite.get(String(website._id)) ?? [])
+    ),
+  });
 };
 
 // disable (soft-delete) a website
