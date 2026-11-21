@@ -7,6 +7,8 @@ import { parseExpectedStatus } from "./expectedStatus";
 const USER_AGENT = "UptimeWatch/1.0 (+https://uptimewatch.app)";
 /** Upper bound on how much of a body we read when looking for a keyword. */
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_REDIRECTS = 5;
+const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
 
 export interface CheckTarget {
   url: string;
@@ -14,6 +16,7 @@ export interface CheckTarget {
   timeoutMs?: number;
   expectedStatus?: string;
   keyword?: string;
+  followRedirects?: boolean;
 }
 
 export interface CheckResult {
@@ -47,6 +50,7 @@ export async function runHttpCheck(
   const method = target.method ?? MONITOR_DEFAULTS.method;
   const timeout = target.timeoutMs ?? MONITOR_DEFAULTS.timeoutMs;
   const keyword = target.keyword?.trim() ?? "";
+  const followRedirects = target.followRedirects ?? MONITOR_DEFAULTS.followRedirects;
   const isExpected =
     parseExpectedStatus(target.expectedStatus ?? MONITOR_DEFAULTS.expectedStatus) ??
     parseExpectedStatus(MONITOR_DEFAULTS.expectedStatus)!;
@@ -61,24 +65,36 @@ export async function runHttpCheck(
   });
 
   try {
-    // Re-validate at fetch time to guard against a host that now resolves to a
-    // private address (DNS rebinding) or a URL stored before SSRF checks existed.
-    await deps.assertSafeUrl(target.url);
+    let url = target.url;
+    let response;
+    for (let hop = 0; ; hop++) {
+      // Validate every hop (not just the stored URL): a public URL could
+      // redirect into a private/internal address, and DNS can change between
+      // checks (rebinding). Redirects are followed manually for this reason.
+      await deps.assertSafeUrl(url);
 
-    const response = await deps.request({
-      url: target.url,
-      method,
-      timeout,
-      // Status is judged against the monitor's expected codes below.
-      validateStatus: () => true,
-      // Do not follow redirects: a public URL could otherwise redirect the
-      // server into a private/internal address, bypassing the SSRF check.
-      maxRedirects: 0,
-      headers: { "User-Agent": USER_AGENT },
-      // Only buffer the body when we need to search it.
-      responseType: keyword ? "text" : "stream",
-      maxContentLength: MAX_BODY_BYTES,
-    });
+      response = await deps.request({
+        url,
+        method,
+        timeout,
+        // Status is judged against the monitor's expected codes below.
+        validateStatus: () => true,
+        maxRedirects: 0,
+        headers: { "User-Agent": USER_AGENT },
+        // Only buffer the body when we need to search it.
+        responseType: keyword ? "text" : "stream",
+        maxContentLength: MAX_BODY_BYTES,
+      });
+
+      const location = response.headers?.location;
+      if (!followRedirects || !REDIRECT_CODES.has(response.status) || !location) break;
+
+      (response.data as { destroy?: () => void } | undefined)?.destroy?.();
+      if (hop + 1 > MAX_REDIRECTS) {
+        return fail("HTTP_STATUS", `Too many redirects (>${MAX_REDIRECTS})`, response.status);
+      }
+      url = new URL(String(location), url).toString();
+    }
 
     const latency = deps.now() - startTime;
     if (!keyword) (response.data as { destroy?: () => void } | undefined)?.destroy?.();

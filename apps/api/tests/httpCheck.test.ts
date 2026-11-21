@@ -140,3 +140,61 @@ describe("runHttpCheck monitor configuration", () => {
     expect(destroy).toHaveBeenCalled();
   });
 });
+
+describe("runHttpCheck redirects", () => {
+  const redirect = (to: string, status = 301) => ({ status, headers: { location: to } });
+
+  test("follows redirects and judges the final response", async () => {
+    const responses = [redirect("/login"), { status: 200 }];
+    const request = mock(async (_config: any) => responses.shift()!);
+    const assertSafeUrl = mock(async (_url: string) => {});
+    const result = await runHttpCheck(
+      { url: "https://x.dev/app" },
+      deps({ request: request as any, assertSafeUrl })
+    );
+    expect(result).toMatchObject({ status: "UP", statusCode: 200 });
+    expect(request.mock.calls.map((c) => c[0].url)).toEqual([
+      "https://x.dev/app",
+      "https://x.dev/login",
+    ]);
+    // Every hop is SSRF-validated.
+    expect(assertSafeUrl.mock.calls.map((c) => c[0])).toEqual([
+      "https://x.dev/app",
+      "https://x.dev/login",
+    ]);
+  });
+
+  test("blocks redirects into private addresses", async () => {
+    const request = mock(async (_config: any) => redirect("http://127.0.0.1/admin"));
+    const result = await runHttpCheck(
+      { url: "https://x.dev" },
+      deps({
+        request: request as any,
+        assertSafeUrl: mock(async (url: string) => {
+          if (url.includes("127.0.0.1")) {
+            throw new UnsafeUrlError("URL resolves to a private or reserved address");
+          }
+        }),
+      })
+    );
+    expect(result).toMatchObject({ status: "DOWN", errorType: "BLOCKED" });
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  test("gives up after too many redirects", async () => {
+    const request = mock(async (_config: any) => redirect("/loop"));
+    const result = await runHttpCheck({ url: "https://x.dev" }, deps({ request: request as any }));
+    expect(result.status).toBe("DOWN");
+    expect(result.errorMessage).toContain("Too many redirects");
+  });
+
+  test("does not follow when followRedirects is off", async () => {
+    const request = mock(async (_config: any) => redirect("/elsewhere", 302));
+    const result = await runHttpCheck(
+      { url: "https://x.dev", followRedirects: false },
+      deps({ request: request as any })
+    );
+    expect(result).toMatchObject({ status: "UP", statusCode: 302 });
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+});
