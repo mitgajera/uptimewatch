@@ -13,9 +13,10 @@ function log(message: string, data: Record<string, any> = {}) {
  * open/close incidents + fire UP/DOWN notifications when the state changes.
  */
 async function checkWebsite(website: any) {
-  const { status, latency, statusCode } = await runHttpCheck(website.url);
+  const result = await runHttpCheck(website.url);
+  const { status, latency, statusCode, errorType, errorMessage } = result;
   if (status === "DOWN") {
-    log("Website check failed", { url: website.url, statusCode });
+    log("Website check failed", { url: website.url, statusCode, errorType, errorMessage });
   }
 
   await WebsiteTick.create({
@@ -23,10 +24,12 @@ async function checkWebsite(website: any) {
     status,
     latency,
     statusCode,
+    errorType,
+    errorMessage,
   });
 
   const label = website.name || website.url;
-  const event = evaluateTransition(website, { status, latency, statusCode });
+  const event = evaluateTransition(website, result);
 
   if (event === "WENT_DOWN") {
     log("Website is down (new incident)", { url: website.url, websiteId: website._id });
@@ -37,6 +40,8 @@ async function checkWebsite(website: any) {
       startedAt: new Date(),
       ongoing: true,
       lastStatusCode: statusCode,
+      errorType,
+      errorMessage,
     });
     await Notification.create({
       userId: website.userId,

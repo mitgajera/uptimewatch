@@ -1,5 +1,7 @@
 import axios from "axios";
+import type { CheckErrorType } from "db/client";
 import { assertSafeUrl } from "../utils/ssrf";
+import { classifyError, describeError } from "./classify";
 
 export const DEFAULT_TIMEOUT_MS = 10_000;
 const USER_AGENT = "UptimeWatch/1.0 (+https://uptimewatch.app)";
@@ -8,6 +10,8 @@ export interface CheckResult {
   status: "UP" | "DOWN";
   latency: number;
   statusCode: number | null;
+  errorType: CheckErrorType | null;
+  errorMessage: string | null;
 }
 
 export interface CheckDeps {
@@ -48,16 +52,22 @@ export async function runHttpCheck(
       maxRedirects: 0,
       headers: { "User-Agent": USER_AGENT },
     });
+    const up = response.status < 500;
     return {
-      status: response.status < 500 ? "UP" : "DOWN",
+      status: up ? "UP" : "DOWN",
       latency: deps.now() - startTime,
       statusCode: response.status,
+      errorType: up ? null : "HTTP_STATUS",
+      errorMessage: up ? null : `Unexpected HTTP ${response.status}`,
     };
   } catch (error: any) {
+    const statusCode = error?.response?.status ?? null;
     return {
       status: "DOWN",
       latency: deps.now() - startTime,
-      statusCode: error?.response?.status ?? null,
+      statusCode,
+      errorType: classifyError(error),
+      errorMessage: statusCode ? `Unexpected HTTP ${statusCode}` : describeError(error),
     };
   }
 }
