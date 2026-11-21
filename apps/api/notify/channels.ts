@@ -1,7 +1,7 @@
 import axios from "axios";
 import type { AlertChannelType } from "db/constants";
 import { sendEmail } from "../lib/email";
-import { assertSafeUrl } from "../utils/ssrf";
+import { assertSafeUrl, pinSafeUrl } from "../utils/ssrf";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SLACK_RE = /^https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9/_-]+$/;
@@ -54,13 +54,16 @@ export interface DeliveryDeps {
 }
 
 const defaultDeps: DeliveryDeps = {
-  post: (url, body) =>
-    axios.post(url, body, {
+  post: async (url, body) => {
+    // Connect to the vetted address so DNS can't rebind between check and POST.
+    const target = await pinSafeUrl(url);
+    return axios.post(target.url, body, {
       timeout: DELIVERY_TIMEOUT_MS,
       // Never follow redirects from user-supplied endpoints (SSRF).
       maxRedirects: 0,
-      headers: { "User-Agent": "UptimeWatch-Alerts/1.0" },
-    }),
+      headers: { "User-Agent": "UptimeWatch-Alerts/1.0", ...target.headers },
+    });
+  },
   sendEmail,
   assertSafeUrl,
 };

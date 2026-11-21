@@ -1,4 +1,6 @@
+import net from "node:net";
 import tls from "node:tls";
+import { safeLookup } from "../utils/ssrf";
 
 /** Days-before-expiry at which users are warned, most distant first. */
 export const SSL_ALERT_THRESHOLDS = [30, 14, 7, 1] as const;
@@ -18,7 +20,16 @@ export interface CertificateInfo {
  */
 export function fetchCertificate(host: string, port = 443): Promise<CertificateInfo> {
   return new Promise((resolve, reject) => {
-    const socket = tls.connect({ host, port, servername: host, rejectUnauthorized: false });
+    // IPv6 literals arrive bracketed from URL.hostname; SNI must be a DNS name.
+    const bare = host.replace(/^\[|\]$/g, "");
+    const socket = tls.connect({
+      host: bare,
+      port,
+      servername: net.isIP(bare) ? undefined : bare,
+      rejectUnauthorized: false,
+      // Resolve through the SSRF guard so the socket only reaches vetted addresses.
+      lookup: safeLookup,
+    });
     const done = (fn: () => void) => {
       socket.destroy();
       fn();

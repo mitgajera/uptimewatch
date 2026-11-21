@@ -1,6 +1,6 @@
 import axios from "axios";
 import { MONITOR_DEFAULTS, type CheckErrorType, type MonitorMethod } from "db/constants";
-import { assertSafeUrl } from "../utils/ssrf";
+import { assertSafeUrl, pinSafeUrl } from "../utils/ssrf";
 import { classifyError, describeError } from "./classify";
 import { parseExpectedStatus } from "./expectedStatus";
 
@@ -33,8 +33,14 @@ export interface CheckDeps {
   now: () => number;
 }
 
+/** Connect to the address the SSRF guard vetted, not a fresh DNS answer. */
+const pinnedRequest: CheckDeps["request"] = async (config) => {
+  const target = await pinSafeUrl(String(config.url));
+  return axios.request({ ...config, url: target.url, headers: { ...config.headers, ...target.headers } });
+};
+
 const defaultDeps: CheckDeps = {
-  request: axios.request.bind(axios),
+  request: pinnedRequest as CheckDeps["request"],
   assertSafeUrl,
   now: Date.now,
 };
