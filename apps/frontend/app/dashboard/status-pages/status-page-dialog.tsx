@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useId, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -28,8 +28,9 @@ const slugify = (s: string) =>
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
+    .slice(0, 48)
+    // Strip edge dashes after truncating, or a long title can end in "-".
+    .replace(/^-+|-+$/g, "");
 
 interface Props {
   open: boolean;
@@ -75,7 +76,10 @@ export function StatusPageDialog({ open, onOpenChange, page }: Props) {
     }
 
     try {
-      await save.mutateAsync({ id: page?.id, title: title.trim(), slug, description: description.trim(), websiteIds, published });
+      // Drop monitors deleted since the page was saved; they can't be unticked.
+      const available = new Set((monitors.data ?? []).map((m) => m.id));
+      const ids = websiteIds.filter((x) => available.has(x));
+      await save.mutateAsync({ id: page?.id, title: title.trim(), slug, description: description.trim(), websiteIds: ids, published });
       toast.success(page ? "Status page saved" : "Status page created");
       onOpenChange(false);
     } catch (err) {
@@ -176,6 +180,14 @@ export function StatusPageDialog({ open, onOpenChange, page }: Props) {
             <legend className="mb-1.5 text-sm font-medium">Monitors to show</legend>
             {monitors.isPending ? (
               <p className="text-sm text-muted-foreground">Loading monitors…</p>
+            ) : monitors.isError ? (
+              <div className="flex items-center justify-between gap-3 rounded-md border border-dashed p-3 text-sm">
+                <span className="text-destructive">Couldn&apos;t load your monitors.</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => monitors.refetch()}>
+                  <RotateCw className="size-4" aria-hidden="true" />
+                  Retry
+                </Button>
+              </div>
             ) : (monitors.data ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground">Create a monitor first, then add it here.</p>
             ) : (
@@ -216,7 +228,8 @@ export function StatusPageDialog({ open, onOpenChange, page }: Props) {
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={save.isPending}>
               Cancel
             </Button>
-            <Button type="submit" disabled={save.isPending} aria-busy={save.isPending}>
+            {/* Saving without the monitor list would silently drop the page's monitors. */}
+            <Button type="submit" disabled={save.isPending || !monitors.isSuccess} aria-busy={save.isPending}>
               {save.isPending && <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden="true" />}
               {page ? "Save changes" : "Create page"}
             </Button>
