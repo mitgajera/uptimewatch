@@ -19,6 +19,7 @@ import { useRotateHeartbeatToken } from "@/hooks/queries";
 import { apiErrorMessage } from "@/lib/api/errors";
 import type { Monitor } from "@/lib/api/types";
 import { formatInterval, heartbeatUrl } from "@/lib/monitor-format";
+import { copyText } from "@/lib/clipboard";
 
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
@@ -30,7 +31,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       className="size-10 shrink-0"
       aria-label={copied ? "Copied" : label}
       onClick={() =>
-        navigator.clipboard.writeText(text).then(
+        copyText(text).then(
           () => {
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { API_BACKEND_URL } from "@/config";
 import type { StatusPage } from "@/lib/api/types";
+import { copyText } from "@/lib/clipboard";
 
 function Snippet({ id, label, code }: { id: string; label: string; code: string }) {
   const [copied, setCopied] = useState(false);
@@ -25,7 +26,7 @@ function Snippet({ id, label, code }: { id: string; label: string; code: string 
           className="size-10 shrink-0"
           aria-label={copied ? "Copied" : `Copy ${label}`}
           onClick={() =>
-            navigator.clipboard.writeText(code).then(
+            copyText(code).then(
               () => {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 1500);
