@@ -44,6 +44,10 @@ export default function MonitorsPage() {
     return c;
   }, [monitors.data]);
 
+  // Match the Down filter (which excludes paused and maintenance monitors)
+  // once the list is loaded; the stats endpoint counts every isDown monitor.
+  const downNow = monitors.data ? counts.down : (stats.data?.down ?? 0);
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (monitors.data ?? [])
@@ -82,8 +86,8 @@ export default function MonitorsPage() {
           <>
             <SummaryCard
               label="Down now"
-              value={String(stats.data.down)}
-              tone={stats.data.down > 0 ? "text-destructive" : undefined}
+              value={String(downNow)}
+              tone={downNow > 0 ? "text-destructive" : undefined}
             />
             <SummaryCard label="Uptime (24h)" value={formatUptime(stats.data.checksLast24h ? stats.data.avgUptime : null)} />
             <SummaryCard label="Avg response (24h)" value={formatLatency(stats.data.checksLast24h ? stats.data.avgResponseTime : null)} />
