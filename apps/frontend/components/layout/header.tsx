@@ -14,7 +14,7 @@ import { API_BACKEND_URL, CLERK_JWT_TEMPLATE } from "@/config";
 
 const NavLinks = ({ onClick }: { onClick?: () => void }) => (
   <>
-    {["features", "how-it-works", "testimonials"].map((item) => (
+    {["features", "how-it-works"].map((item) => (
       <Link
         key={item}
         href={`#${item}`}
