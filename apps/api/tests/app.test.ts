@@ -56,4 +56,14 @@ describe("app", () => {
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "Not found" });
   });
+
+  test("malformed and oversized JSON bodies are client errors, not 500s", async () => {
+    const post = (body: string) =>
+      fetch(`${base}/nope`, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    const bad = await post("{not json");
+    expect(bad.status).toBe(400);
+    expect(await bad.json()).toEqual({ error: "Bad request" });
+    const big = await post(JSON.stringify({ x: "a".repeat(20_000) }));
+    expect(big.status).toBe(413);
+  });
 });

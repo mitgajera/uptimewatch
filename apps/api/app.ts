@@ -69,9 +69,15 @@ app.use((req: Request, res: Response) => {
 // as a structured JSON 500 instead of leaking a stack trace or hanging the request.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
-  console.error("Unhandled request error:", err instanceof Error ? err.stack : err);
   if (res.headersSent) {
     return next(err);
   }
+  // Client errors raised by middleware (malformed JSON, oversized body, ...).
+  const status = (err as { status?: number; statusCode?: number })?.status ?? (err as any)?.statusCode;
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    res.status(status).json({ error: status === 413 ? "Request body too large" : "Bad request" });
+    return;
+  }
+  console.error("Unhandled request error:", err instanceof Error ? err.stack : err);
   res.status(500).json({ error: "Internal server error" });
 });
