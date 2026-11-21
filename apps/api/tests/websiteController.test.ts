@@ -16,6 +16,9 @@ const Website = {
   find: mock(() => query<any[]>([])),
   findOne: mock(() => query<any>(null)),
   updateOne: mock(async () => ({ matchedCount: 1 })),
+  countDocuments: mock(async () => 0),
+  create: mock(async (doc: any) => ({ _id: "new-id", ...doc })),
+  findOneAndUpdate: mock((..._args: any[]) => query<any>(null)),
 };
 const WebsiteTick = {
   find: mock((_filter: any) => query<any[]>([])),
@@ -23,7 +26,8 @@ const WebsiteTick = {
 
 mock.module("db/client", () => ({ Website, WebsiteTick }));
 
-const { getAllWebsites, disableWebsite, RECENT_TICKS_WINDOW_MS } = await import(
+const { getAllWebsites, disableWebsite, createWebsite, updateWebsite, RECENT_TICKS_WINDOW_MS } =
+  await import(
   "../controllers/websiteController"
 );
 
@@ -47,9 +51,20 @@ const mockReq = (overrides: Partial<Request> = {}) =>
   ({ userId: "user_1", params: {}, query: {}, body: {}, ...overrides }) as unknown as Request;
 
 beforeEach(() => {
-  for (const m of [Website.find, Website.findOne, Website.updateOne, WebsiteTick.find]) {
+  for (const m of [
+    Website.find,
+    Website.findOne,
+    Website.updateOne,
+    Website.countDocuments,
+    Website.create,
+    Website.findOneAndUpdate,
+    WebsiteTick.find,
+  ]) {
     m.mockReset();
   }
+  Website.countDocuments.mockResolvedValue(0);
+  Website.create.mockImplementation(async (doc: any) => ({ _id: "new-id", ...doc }));
+  Website.findOneAndUpdate.mockReturnValue(query(null));
   Website.find.mockReturnValue(query([]));
   WebsiteTick.find.mockReturnValue(query([]));
   Website.updateOne.mockResolvedValue({ matchedCount: 1 });
@@ -125,5 +140,94 @@ describe("disableWebsite", () => {
       { _id: "65a000000000000000000001", userId: "user_1", disabled: false },
       { $set: { disabled: true } }
     );
+  });
+});
+
+// A public IP literal avoids DNS lookups in the SSRF check.
+const PUBLIC_URL = "https://1.1.1.1/health";
+const ID = "65a000000000000000000001";
+
+describe("createWebsite", () => {
+  test("creates a monitor with validated config", async () => {
+    const res = mockRes();
+    await createWebsite(
+      mockReq({ body: { url: PUBLIC_URL, name: " API ", intervalSeconds: 300 } }),
+      res
+    );
+    expect(res.statusCode).toBe(201);
+    expect(Website.create).toHaveBeenCalledWith({
+      url: PUBLIC_URL,
+      name: "API",
+      intervalSeconds: 300,
+      userId: "user_1",
+      disabled: false,
+    });
+  });
+
+  test("rejects invalid config and private targets", async () => {
+    const bad = mockRes();
+    await createWebsite(mockReq({ body: { url: PUBLIC_URL, intervalSeconds: 7 } }), bad);
+    expect(bad.statusCode).toBe(400);
+    expect(bad.body.message).toContain("intervalSeconds");
+
+    const priv = mockRes();
+    await createWebsite(mockReq({ body: { url: "http://127.0.0.1" } }), priv);
+    expect(priv.statusCode).toBe(400);
+    expect(Website.create).not.toHaveBeenCalled();
+  });
+
+  test("enforces the per-user monitor limit", async () => {
+    Website.countDocuments.mockResolvedValue(10_000);
+    const res = mockRes();
+    await createWebsite(mockReq({ body: { url: PUBLIC_URL } }), res);
+    expect(res.statusCode).toBe(403);
+    expect(Website.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateWebsite", () => {
+  test("applies a partial update scoped to the user", async () => {
+    Website.findOneAndUpdate.mockReturnValue(query({ _id: ID, url: PUBLIC_URL, paused: true }));
+    const res = mockRes();
+    await updateWebsite(mockReq({ params: { websiteId: ID } as any, body: { paused: true } }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(Website.findOneAndUpdate.mock.calls[0]![0]).toEqual({
+      _id: ID,
+      userId: "user_1",
+      disabled: false,
+    });
+    expect(Website.findOneAndUpdate.mock.calls[0]![1]).toEqual({ $set: { paused: true } });
+    // Defaults are filled in for fields missing on legacy documents.
+    expect(res.body).toMatchObject({ id: ID, paused: true, expectedStatus: "200-399" });
+  });
+
+  test("resets failure and certificate state when the URL changes", async () => {
+    Website.findOneAndUpdate.mockReturnValue(query({ _id: ID, url: PUBLIC_URL }));
+    await updateWebsite(
+      mockReq({ params: { websiteId: ID } as any, body: { url: PUBLIC_URL } }),
+      mockRes()
+    );
+    expect(Website.findOneAndUpdate.mock.calls[0]![1].$set).toMatchObject({
+      url: PUBLIC_URL,
+      consecutiveFailures: 0,
+      sslExpiresAt: null,
+    });
+  });
+
+  test("404s for monitors the user does not own", async () => {
+    const res = mockRes();
+    await updateWebsite(mockReq({ params: { websiteId: ID } as any, body: { name: "x" } }), res);
+    expect(res.statusCode).toBe(404);
+  });
+
+  test("rejects attempts to set protected fields", async () => {
+    const res = mockRes();
+    await updateWebsite(
+      mockReq({ params: { websiteId: ID } as any, body: { userId: "attacker" } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(Website.findOneAndUpdate).not.toHaveBeenCalled();
   });
 });
