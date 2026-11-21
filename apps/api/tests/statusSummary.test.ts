@@ -36,6 +36,10 @@ describe("overallUptime", () => {
     ).toBe(99);
     expect(overallUptime([])).toBeNull();
   });
+
+  test("never shows 100% when any check failed", () => {
+    expect(overallUptime([{ day: "a", total: 130_000, up: 129_999 }])).toBe(99.99);
+  });
 });
 
 describe("statuses", () => {

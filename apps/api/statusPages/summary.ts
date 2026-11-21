@@ -1,3 +1,4 @@
+import { uptimePercent } from "../utils/stats";
 export const STATUS_HISTORY_DAYS = 90;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -25,7 +26,7 @@ export function buildDailyBars(rows: DailyCount[], now: number, days = STATUS_HI
     const row = byDay.get(date);
     bars.push({
       date,
-      uptime: row && row.total > 0 ? Math.round((row.up / row.total) * 10_000) / 100 : null,
+      uptime: row && row.total > 0 ? uptimePercent(row.up, row.total) : null,
     });
   }
   return bars;
@@ -35,8 +36,7 @@ export function buildDailyBars(rows: DailyCount[], now: number, days = STATUS_HI
 export function overallUptime(rows: DailyCount[]): number | null {
   const total = rows.reduce((n, r) => n + r.total, 0);
   if (total === 0) return null;
-  const up = rows.reduce((n, r) => n + r.up, 0);
-  return Math.round((up / total) * 10_000) / 100;
+  return uptimePercent(rows.reduce((n, r) => n + r.up, 0), total);
 }
 
 export type MonitorPublicStatus = "up" | "down" | "maintenance" | "paused" | "unknown";
