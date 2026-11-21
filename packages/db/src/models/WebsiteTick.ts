@@ -1,28 +1,10 @@
 import { Schema, model, models, Types, Model } from "mongoose";
+import { CHECK_ERROR_TYPES, type CheckErrorType } from "../constants";
 
 export type WebsiteStatus = "UP" | "DOWN";
 
-/** Why a check failed. Null for successful checks. */
-export type CheckErrorType =
-  | "DNS"
-  | "TIMEOUT"
-  | "CONNECTION"
-  | "TLS"
-  | "HTTP_STATUS"
-  | "KEYWORD"
-  | "BLOCKED"
-  | "UNKNOWN";
-
-export const CHECK_ERROR_TYPES: CheckErrorType[] = [
-  "DNS",
-  "TIMEOUT",
-  "CONNECTION",
-  "TLS",
-  "HTTP_STATUS",
-  "KEYWORD",
-  "BLOCKED",
-  "UNKNOWN",
-];
+export type { CheckErrorType };
+export { CHECK_ERROR_TYPES };
 
 export interface IWebsiteTick {
   _id: Types.ObjectId;

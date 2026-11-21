@@ -1,21 +1,8 @@
 import { Schema, model, models, Types, Model } from "mongoose";
+import { MONITOR_DEFAULTS, MONITOR_INTERVALS, type MonitorMethod } from "../constants";
 
-export type MonitorMethod = "GET" | "HEAD" | "POST";
-
-/** Allowed check intervals, in seconds. */
-export const MONITOR_INTERVALS = [60, 120, 300, 600, 900, 1800, 3600] as const;
-
-/** Defaults applied to monitors (including legacy documents missing a field). */
-export const MONITOR_DEFAULTS = {
-  method: "GET" as MonitorMethod,
-  intervalSeconds: 60,
-  timeoutMs: 10_000,
-  expectedStatus: "200-399",
-  keyword: "",
-  followRedirects: true,
-  failureThreshold: 2,
-  paused: false,
-};
+export type { MonitorMethod };
+export { MONITOR_DEFAULTS, MONITOR_INTERVALS };
 
 export interface IWebsite {
   _id: Types.ObjectId;

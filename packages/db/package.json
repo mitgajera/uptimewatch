@@ -3,7 +3,8 @@
   "module": "index.ts",
   "type": "module",
   "exports": {
-    "./client": "./src/index.ts"
+    "./client": "./src/index.ts",
+    "./constants": "./src/constants.ts"
   },
   "scripts": {
     "db:seed": "bun run seed.ts",
