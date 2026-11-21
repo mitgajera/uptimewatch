@@ -4,6 +4,7 @@ import { connectDB } from "db/client";
 import { authMiddleware } from "./middleware/middleware";
 import websiteRoutes from "./routes/websiteRoutes";
 import userRoutes from "./routes/userRoutes";
+import alertChannelRoutes from "./routes/alertChannelRoutes";
 import { scheduleMonitor } from "./cron/monitor";
 import { scheduleWebsiteAlert } from "./cron/websiteAlert";
 
@@ -29,6 +30,7 @@ app.use(
 // Routes
 app.use("/api/v1", authMiddleware, websiteRoutes);
 app.use("/api/v1", authMiddleware, userRoutes);
+app.use("/api/v1", authMiddleware, alertChannelRoutes);
 
 // 404 for unmatched routes.
 app.use((req: Request, res: Response) => {
