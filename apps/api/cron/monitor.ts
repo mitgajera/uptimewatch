@@ -1,8 +1,7 @@
-import { Website, WebsiteTick, Notification, Incident } from "db/client";
+import { Website } from "db/client";
 import { runHttpCheck } from "../monitor/httpCheck";
-import { evaluateTransition } from "../monitor/transition";
+import { recordCheckResult } from "../monitor/record";
 import { isDue, mapSettledWithConcurrency } from "../monitor/schedule";
-import { downAlert, recoveryAlert } from "../monitor/messages";
 
 const CONCURRENCY = Math.max(1, Number(process.env.MONITOR_CONCURRENCY) || 25);
 
@@ -11,88 +10,9 @@ function log(message: string, data: Record<string, any> = {}) {
   console.log(`[${timestamp}] [MONITOR] ${message}`, data);
 }
 
-/**
- * Check a single website: measure latency + status, persist a tick, and
- * open/close incidents + fire UP/DOWN notifications when the state changes.
- */
+/** Run an HTTP check against a website and record the result. */
 async function checkWebsite(website: any) {
-  const result = await runHttpCheck(website);
-  const { status, latency, statusCode, errorType, errorMessage } = result;
-  if (status === "DOWN") {
-    log("Website check failed", { url: website.url, statusCode, errorType, errorMessage });
-  }
-
-  await WebsiteTick.create({
-    websiteId: website._id,
-    status,
-    latency,
-    statusCode,
-    errorType,
-    errorMessage,
-  });
-
-  const { event, consecutiveFailures, isDown } = evaluateTransition(website, result);
-
-  await Website.updateOne(
-    { _id: website._id },
-    {
-      $set: {
-        isDown,
-        consecutiveFailures,
-        lastCheckedAt: new Date(),
-        lastStatusCode: statusCode,
-        lastLatency: latency,
-        lastErrorType: errorType,
-      },
-    }
-  );
-
-  if (event === "WENT_DOWN") {
-    log("Website is down (new incident)", { url: website.url, websiteId: website._id });
-    await Incident.create({
-      websiteId: website._id,
-      userId: website.userId,
-      startedAt: new Date(),
-      ongoing: true,
-      lastStatusCode: statusCode,
-      errorType,
-      errorMessage,
-    });
-    await Notification.create({
-      userId: website.userId,
-      websiteId: website._id,
-      kind: "DOWN",
-      ...downAlert(website, result),
-    });
-  }
-
-  else if (event === "RECOVERED") {
-    log("Website recovered", { url: website.url, websiteId: website._id });
-
-    const openIncident = await Incident.findOne({
-      websiteId: website._id,
-      ongoing: true,
-    }).sort({ startedAt: -1 });
-
-    let downtimeMs: number | null = null;
-    if (openIncident) {
-      const resolvedAt = new Date();
-      downtimeMs = resolvedAt.getTime() - openIncident.startedAt.getTime();
-      openIncident.resolvedAt = resolvedAt;
-      openIncident.ongoing = false;
-      openIncident.durationMs = downtimeMs;
-      await openIncident.save();
-    }
-
-    await Notification.create({
-      userId: website.userId,
-      websiteId: website._id,
-      kind: "UP",
-      ...recoveryAlert(website, downtimeMs),
-    });
-  }
-
-  log("Recorded tick", { url: website.url, status, latency: `${latency}ms` });
+  await recordCheckResult(website, await runHttpCheck(website));
 }
 
 let running = false;
