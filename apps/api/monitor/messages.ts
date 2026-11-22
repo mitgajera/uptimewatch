@@ -2,11 +2,12 @@ import type { CheckErrorType } from "db/constants";
 
 const ERROR_LABELS: Record<CheckErrorType, string> = {
   DNS: "DNS lookup failed",
+  DNS_MISMATCH: "Unexpected DNS answer",
   TIMEOUT: "Request timed out",
   CONNECTION: "Connection failed",
   TLS: "TLS/SSL error",
   HTTP_STATUS: "Unexpected HTTP status",
-  KEYWORD: "Keyword not found",
+  KEYWORD: "Keyword check failed",
   BLOCKED: "Blocked target address",
   MISSED: "Heartbeat not received",
   UNKNOWN: "Unknown error",
@@ -24,11 +25,25 @@ export interface AlertMessage {
 interface MonitorRef {
   name?: string;
   url: string;
+  type?: string;
+  host?: string;
+  port?: number | null;
 }
 
-const labelOf = (m: MonitorRef) => m.name?.trim() || m.url || "Heartbeat monitor";
-/** Heartbeat monitors have no URL; omit the line rather than print "URL: ". */
-const urlLine = (m: MonitorRef) => (m.url ? `URL: ${m.url}` : null);
+/** Where a monitor points: its URL, host:port (tcp) or host (dns). */
+export function monitorTarget(m: MonitorRef): string {
+  if (m.type === "tcp" && m.host) return `${m.host}:${m.port ?? ""}`;
+  if (m.type === "dns" && m.host) return m.host;
+  return m.url || "";
+}
+
+const labelOf = (m: MonitorRef) => m.name?.trim() || monitorTarget(m) || "Heartbeat monitor";
+/** Heartbeat monitors have no target; omit the line rather than print "URL: ". */
+const urlLine = (m: MonitorRef) => {
+  const target = monitorTarget(m);
+  if (!target) return null;
+  return m.type === "tcp" || m.type === "dns" ? `Host: ${target}` : `URL: ${target}`;
+};
 
 export function formatDuration(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -95,6 +110,28 @@ export function recoveryAlert(monitor: MonitorRef, downtimeMs: number | null): A
       urlLine(monitor),
       downtimeMs != null ? `Downtime: ${formatDuration(downtimeMs)}` : null,
       `Recovered: ${new Date().toUTCString()}`,
+    ]
+      .filter((line): line is string => line !== null)
+      .join("\n"),
+  };
+}
+
+export function reminderAlert(
+  monitor: MonitorRef,
+  downForMs: number,
+  failure: { errorType: CheckErrorType | null; errorMessage: string | null; statusCode: number | null }
+): AlertMessage {
+  const label = labelOf(monitor);
+  const reason = failure.errorMessage || errorLabel(failure.errorType);
+  return {
+    subject: `🔴 Reminder: ${label} is still DOWN (${formatDuration(downForMs)})`,
+    message: [
+      `${label} is still DOWN after ${formatDuration(downForMs)}.`,
+      ``,
+      urlLine(monitor),
+      `Reason: ${errorLabel(failure.errorType)}${failure.statusCode ? ` (HTTP ${failure.statusCode})` : ""}`,
+      `Details: ${reason}`,
+      `Checked: ${new Date().toUTCString()}`,
     ]
       .filter((line): line is string => line !== null)
       .join("\n"),

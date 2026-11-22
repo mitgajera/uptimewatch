@@ -9,6 +9,7 @@ import {
   type DailyCount,
 } from "../statusPages/summary";
 import { renderStatusBadge } from "../statusPages/badge";
+import { DEFAULT_ACCENT_COLOR } from "db/constants";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const INCIDENT_HISTORY_DAYS = 14;
@@ -43,12 +44,16 @@ const hostnameOf = (url: string) => {
   }
 };
 
+/** Public headline for an incident: "<monitor> is down" / "<monitor> outage". */
+export const incidentTitle = (monitor: string, ongoing: boolean) =>
+  ongoing ? `${monitor} is down` : `${monitor} outage`;
+
 async function buildStatusPage(slug: string, now: number) {
   const page = await StatusPage.findOne({ slug, published: true }).lean();
   if (!page) return null;
 
   const websites = await Website.find({ _id: { $in: page.websiteIds }, disabled: false })
-    .select("name url paused isDown lastCheckedAt maintenanceUntil")
+    .select("name url type host paused isDown lastCheckedAt maintenanceUntil")
     .lean();
   const ids = websites.map((w) => w._id);
 
@@ -72,10 +77,12 @@ async function buildStatusPage(slug: string, now: number) {
             },
           },
         ]),
-        Incident.find({
-          websiteId: { $in: ids },
-          startedAt: { $gte: new Date(now - INCIDENT_HISTORY_DAYS * DAY_MS) },
-        })
+        Incident.find(
+          // Without history, only what is happening now is listed.
+          page.showIncidentHistory === false
+            ? { websiteId: { $in: ids }, ongoing: true }
+            : { websiteId: { $in: ids }, startedAt: { $gte: new Date(now - INCIDENT_HISTORY_DAYS * DAY_MS) } }
+        )
           .sort({ startedAt: -1 })
           .limit(20)
           .lean(),
@@ -97,7 +104,7 @@ async function buildStatusPage(slug: string, now: number) {
       const counts = countsByWebsite.get(String(w._id)) ?? [];
       return {
         id: String(w._id),
-        name: w.name?.trim() || hostnameOf(w.url),
+        name: w.name?.trim() || (w.type === "tcp" || w.type === "dns" ? w.host || "Monitor" : hostnameOf(w.url)),
         status: monitorPublicStatus(w, now),
         uptime: overallUptime(counts),
         days: buildDailyBars(counts, now),
@@ -109,12 +116,20 @@ async function buildStatusPage(slug: string, now: number) {
   return {
     title: page.title,
     description: page.description ?? "",
+    logoUrl: page.logoUrl ?? "",
+    accentColor: page.accentColor ?? DEFAULT_ACCENT_COLOR,
+    announcement: page.announcement ?? "",
     status: pageStatus(monitors.map((m) => m.status)),
     generatedAt: new Date(now).toISOString(),
     monitors,
     incidents: incidents.map((i) => ({
       id: String(i._id),
       monitor: nameById.get(String(i.websiteId)) ?? "Monitor",
+      title: incidentTitle(nameById.get(String(i.websiteId)) ?? "Monitor", i.ongoing),
+      // Only updates the owner chose to publish; never internal notes.
+      updates: (i.updates ?? [])
+        .filter((u) => u.public)
+        .map((u) => ({ at: u.at, message: u.message, status: u.status })),
       startedAt: i.startedAt,
       resolvedAt: i.resolvedAt ?? null,
       durationMs: i.durationMs ?? null,

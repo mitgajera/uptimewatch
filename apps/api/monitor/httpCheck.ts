@@ -1,5 +1,12 @@
 import axios from "axios";
-import { MONITOR_DEFAULTS, type CheckErrorType, type MonitorMethod } from "db/constants";
+import {
+  BODY_METHODS,
+  MONITOR_DEFAULTS,
+  type CheckErrorType,
+  type KeywordMode,
+  type MonitorHeader,
+  type MonitorMethod,
+} from "db/constants";
 import { assertSafeUrl, pinSafeUrl } from "../utils/ssrf";
 import { classifyError, describeError } from "./classify";
 import { parseExpectedStatus } from "./expectedStatus";
@@ -16,6 +23,10 @@ export interface CheckTarget {
   timeoutMs?: number;
   expectedStatus?: string;
   keyword?: string;
+  keywordMode?: KeywordMode;
+  headers?: MonitorHeader[];
+  /** Sent only for POST/PUT/PATCH. */
+  body?: string;
   followRedirects?: boolean;
 }
 
@@ -38,6 +49,8 @@ const pinnedRequest: CheckDeps["request"] = async (config) => {
   const target = await pinSafeUrl(String(config.url));
   return axios.request({ ...config, url: target.url, headers: { ...config.headers, ...target.headers } });
 };
+
+const sendsBody = (method: MonitorMethod, body: string) => body.length > 0 && BODY_METHODS.includes(method);
 
 const defaultDeps: CheckDeps = {
   request: pinnedRequest as CheckDeps["request"],
@@ -74,6 +87,31 @@ async function bodyContains(body: unknown, keyword: string): Promise<boolean> {
   }
 }
 
+/** The request headers for a check: our User-Agent, then the user's own headers. */
+export function buildRequestHeaders(
+  headers: MonitorHeader[] | undefined,
+  body: string | undefined
+): Record<string, string> {
+  const out: Record<string, string> = { "User-Agent": USER_AGENT };
+  for (const h of headers ?? []) {
+    const lower = h.name.toLowerCase();
+    // The client sets these itself; a stored value would corrupt the request.
+    if (lower === "host" || lower === "content-length") continue;
+    // Header names are case-insensitive: a user "user-agent" replaces ours.
+    for (const key of Object.keys(out)) if (key.toLowerCase() === lower) delete out[key];
+    out[h.name] = h.value;
+  }
+  if (body && !Object.keys(out).some((k) => k.toLowerCase() === "content-type")) {
+    let isJson = false;
+    try {
+      JSON.parse(body);
+      isJson = true;
+    } catch {}
+    out["Content-Type"] = isJson ? "application/json" : "text/plain; charset=utf-8";
+  }
+  return out;
+}
+
 /**
  * Perform a single HTTP check against a monitor target and report whether it
  * is UP, how long it took, the status code received and, if it failed, why.
@@ -87,6 +125,8 @@ export async function runHttpCheck(
   let method: MonitorMethod = keywordToFind && target.method === "HEAD" ? "GET" : target.method ?? MONITOR_DEFAULTS.method;
   const timeout = target.timeoutMs ?? MONITOR_DEFAULTS.timeoutMs;
   const keyword = keywordToFind;
+  const keywordMode = target.keywordMode ?? MONITOR_DEFAULTS.keywordMode;
+  const requestBody = target.body ?? "";
   const followRedirects = target.followRedirects ?? MONITOR_DEFAULTS.followRedirects;
   const isExpected =
     parseExpectedStatus(target.expectedStatus ?? MONITOR_DEFAULTS.expectedStatus) ??
@@ -117,7 +157,8 @@ export async function runHttpCheck(
         // Status is judged against the monitor's expected codes below.
         validateStatus: () => true,
         maxRedirects: 0,
-        headers: { "User-Agent": USER_AGENT },
+        headers: buildRequestHeaders(target.headers, sendsBody(method, requestBody) ? requestBody : undefined),
+        ...(sendsBody(method, requestBody) ? { data: requestBody } : {}),
         // Stream, so a keyword search can stop early and big bodies aren't buffered.
         responseType: "stream",
       });
@@ -142,10 +183,16 @@ export async function runHttpCheck(
       return fail("HTTP_STATUS", `Unexpected HTTP ${response.status}`, response.status);
     }
 
-    const found = keyword ? await bodyContains(response.data, keyword) : true;
-    if (!keyword) (response.data as { destroy?: () => void } | undefined)?.destroy?.();
-    if (!found) {
-      return fail("KEYWORD", `Response did not contain "${keyword.slice(0, 50)}"`, response.status);
+    if (keyword) {
+      const found = await bodyContains(response.data, keyword);
+      if (keywordMode === "absent" && found) {
+        return fail("KEYWORD", `Response contained "${keyword.slice(0, 50)}"`, response.status);
+      }
+      if (keywordMode !== "absent" && !found) {
+        return fail("KEYWORD", `Response did not contain "${keyword.slice(0, 50)}"`, response.status);
+      }
+    } else {
+      (response.data as { destroy?: () => void } | undefined)?.destroy?.();
     }
 
     return {

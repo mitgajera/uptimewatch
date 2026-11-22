@@ -1,5 +1,5 @@
 import { Website } from "db/client";
-import { runHttpCheck } from "../monitor/httpCheck";
+import { runMonitorCheck } from "../monitor/runCheck";
 import { recordCheckResult } from "../monitor/record";
 import { evaluateHeartbeat, isHeartbeatDue } from "../monitor/heartbeat";
 import { isDue, mapSettledWithConcurrency, SCHEDULE_GRACE_MS } from "../monitor/schedule";
@@ -11,7 +11,7 @@ function log(message: string, data: Record<string, any> = {}) {
   console.log(`[${timestamp}] [MONITOR] ${message}`, data);
 }
 
-/** Check a monitor (fetch its URL, or evaluate its heartbeat) and record the result. */
+/** Check a monitor (http/tcp/dns, or evaluate its heartbeat) and record the result. */
 async function checkWebsite(website: any) {
   // Stamp the start, so a slow check doesn't push the next one past its slot.
   const startedAt = new Date();
@@ -21,7 +21,7 @@ async function checkWebsite(website: any) {
     await recordCheckResult({ ...website, failureThreshold: 1 }, result, startedAt);
     return;
   }
-  await recordCheckResult(website, await runHttpCheck(website), startedAt);
+  await recordCheckResult(website, await runMonitorCheck(website), startedAt);
 }
 
 /** Intervals are at least a minute, so anything checked more recently can't be due. */

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { StatusPage, Website } from "db/client";
+import { DEFAULT_ACCENT_COLOR } from "db/constants";
 import { isValidId } from "../utils/websites";
 import { clearPublicCache } from "./publicController";
 import { createStatusPageSchema, parseBody, updateStatusPageSchema } from "../validation";
@@ -13,6 +14,10 @@ const serialize = (p: any) => ({
   description: p.description ?? "",
   websiteIds: (p.websiteIds ?? []).map(String),
   published: p.published ?? true,
+  logoUrl: p.logoUrl ?? "",
+  accentColor: p.accentColor ?? DEFAULT_ACCENT_COLOR,
+  announcement: p.announcement ?? "",
+  showIncidentHistory: p.showIncidentHistory ?? true,
   createdAt: p.createdAt,
   updatedAt: p.updatedAt,
 });

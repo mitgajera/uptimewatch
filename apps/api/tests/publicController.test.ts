@@ -119,6 +119,57 @@ describe("getPublicStatusPage", () => {
   });
 });
 
+describe("branding and incident updates", () => {
+  test("includes branding and only public incident updates", async () => {
+    StatusPage.findOne.mockReturnValue(
+      query({
+        title: "Acme",
+        websiteIds: [A],
+        logoUrl: "https://cdn.acme.dev/logo.png",
+        accentColor: "#123abc",
+        announcement: "Planned work tonight",
+      })
+    );
+    Website.find.mockReturnValue(query([{ _id: A, name: "API", url: "https://api.acme.dev", lastCheckedAt: new Date() }]));
+    const at = new Date("2026-01-01T00:05:00Z");
+    Incident.find.mockReturnValue(
+      query([
+        {
+          _id: "i1",
+          websiteId: A,
+          startedAt: new Date(),
+          ongoing: true,
+          updates: [
+            { _id: "u1", at, message: "Investigating", status: "investigating", public: true },
+            { _id: "u2", at, message: "internal note", status: "identified", public: false },
+          ],
+        },
+      ])
+    );
+    const res = mockRes();
+    await getPublicStatusPage(req("acme"), res);
+    expect(res.body).toMatchObject({
+      logoUrl: "https://cdn.acme.dev/logo.png",
+      accentColor: "#123abc",
+      announcement: "Planned work tonight",
+    });
+    expect(res.body.incidents[0].title).toBe("API is down");
+    expect(res.body.incidents[0].updates).toEqual([{ at, message: "Investigating", status: "investigating" }]);
+    expect(JSON.stringify(res.body)).not.toContain("internal note");
+    // History is shown by default.
+    expect(Incident.find.mock.calls[0]![0]).toHaveProperty("startedAt");
+  });
+
+  test("defaults branding for older pages and hides history when turned off", async () => {
+    StatusPage.findOne.mockReturnValue(query({ title: "Acme", websiteIds: [A], showIncidentHistory: false }));
+    Website.find.mockReturnValue(query([{ _id: A, name: "API", url: "https://api.acme.dev" }]));
+    const res = mockRes();
+    await getPublicStatusPage(req("acme"), res);
+    expect(res.body).toMatchObject({ logoUrl: "", accentColor: "#ea580c", announcement: "" });
+    expect(Incident.find.mock.calls[0]![0]).toEqual({ websiteId: { $in: [A] }, ongoing: true });
+  });
+});
+
 describe("getStatusBadge", () => {
   test("renders the page status as an embeddable SVG", async () => {
     StatusPage.findOne.mockReturnValue(query({ title: "Acme", websiteIds: [] }));

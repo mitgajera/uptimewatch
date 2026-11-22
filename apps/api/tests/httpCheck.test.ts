@@ -235,3 +235,76 @@ describe("runHttpCheck redirects", () => {
     expect(await methods("HEAD", 303)).toEqual(["HEAD", "HEAD"]);
   });
 });
+
+describe("runHttpCheck request options", () => {
+  test("sends custom headers and the body for POST/PUT/PATCH", async () => {
+    for (const method of ["POST", "PUT", "PATCH"] as const) {
+      const request = mock(async (_config: any) => ({ status: 200 }));
+      await runHttpCheck(
+        {
+          url: "https://api.dev/graphql",
+          method,
+          headers: [
+            { name: "Authorization", value: "Bearer t0k" },
+            { name: "user-agent", value: "custom-agent" },
+          ],
+          body: '{"query":"{ ok }"}',
+        },
+        deps({ request: request as any })
+      );
+      const config = request.mock.calls[0]![0];
+      expect(config.method).toBe(method);
+      expect(config.data).toBe('{"query":"{ ok }"}');
+      expect(config.headers).toMatchObject({
+        Authorization: "Bearer t0k",
+        "user-agent": "custom-agent",
+        "Content-Type": "application/json",
+      });
+      // The user's User-Agent replaces ours rather than duplicating it.
+      expect(config.headers["User-Agent"]).toBeUndefined();
+    }
+  });
+
+  test("never sends a body for GET/HEAD/DELETE", async () => {
+    for (const method of ["GET", "HEAD", "DELETE"] as const) {
+      const request = mock(async (_config: any) => ({ status: 200 }));
+      await runHttpCheck({ url: "https://api.dev", method, body: "ignored" }, deps({ request: request as any }));
+      const config = request.mock.calls[0]![0];
+      expect(config.data).toBeUndefined();
+      expect(config.headers["Content-Type"]).toBeUndefined();
+    }
+  });
+
+  test("drops Host and Content-Length even if stored", async () => {
+    const request = mock(async (_config: any) => ({ status: 200 }));
+    await runHttpCheck(
+      { url: "https://api.dev", headers: [{ name: "Host", value: "evil" }, { name: "Content-Length", value: "1" }] },
+      deps({ request: request as any })
+    );
+    const headers = request.mock.calls[0]![0].headers;
+    expect(Object.keys(headers).map((k) => k.toLowerCase())).not.toContain("host");
+    expect(Object.keys(headers).map((k) => k.toLowerCase())).not.toContain("content-length");
+  });
+
+  test("keywordMode absent fails when the keyword IS present", async () => {
+    const request = mock(async () => ({ status: 200, data: "<h1>Maintenance mode</h1>" }));
+    const present = await runHttpCheck(
+      { url: "https://x.dev", keyword: "Maintenance", keywordMode: "absent" },
+      deps({ request: request as any })
+    );
+    expect(present).toMatchObject({ status: "DOWN", errorType: "KEYWORD" });
+    expect(present.errorMessage).toContain("contained");
+
+    const absent = await runHttpCheck(
+      { url: "https://x.dev", keyword: "Error", keywordMode: "absent" },
+      deps({ request: request as any })
+    );
+    expect(absent.status).toBe("UP");
+  });
+
+  test("keywordMode contains (default) fails when the keyword is missing", async () => {
+    const request = mock(async () => ({ status: 200, data: "all good" }));
+    const result = await runHttpCheck({ url: "https://x.dev", keyword: "healthy" }, deps({ request: request as any }));
+    expect(result).toMatchObject({ status: "DOWN", errorType: "KEYWORD" });
+  });
+});

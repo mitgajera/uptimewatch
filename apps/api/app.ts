@@ -14,8 +14,29 @@ export const app = express();
 // Behind a proxy/load balancer, trust the first hop for client IPs (rate limits).
 if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || 1);
 app.use(helmet());
+
+// Error bodies are `{ message }` per the API contract; older handlers reply
+// `{ error }`, so mirror it into `message` (keeping `error` for old clients).
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  const json = res.json.bind(res);
+  res.json = (body?: unknown) => {
+    if (
+      res.statusCode >= 400 &&
+      body &&
+      typeof body === "object" &&
+      !Array.isArray(body) &&
+      typeof (body as { error?: unknown }).error === "string" &&
+      (body as { message?: unknown }).message === undefined
+    ) {
+      body = { ...(body as object), message: (body as { error: string }).error };
+    }
+    return json(body);
+  };
+  next();
+});
 // Cap request body size to mitigate memory-exhaustion DoS via large payloads.
-app.use(express.json({ limit: "10kb" }));
+// Monitors may carry a 10 000-character request body plus 10 headers.
+app.use(express.json({ limit: "32kb" }));
 
 // Allowed CORS origins. Add your production frontend URL via the
 // FRONTEND_URL env var (comma-separated for multiple).

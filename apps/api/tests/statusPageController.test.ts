@@ -109,6 +109,36 @@ describe("update/delete", () => {
     expect(StatusPage.findOneAndUpdate.mock.calls[0]![1]).toEqual({ $set: { websiteIds: [W1] } });
   });
 
+  test("saves and returns branding fields, with defaults for older pages", async () => {
+    StatusPage.findOneAndUpdate.mockReturnValue(
+      query({ _id: PAGE, slug: "acme", title: "Acme", websiteIds: [], accentColor: "#ff0000", announcement: "Hi" })
+    );
+    const res = mockRes();
+    await updateStatusPage(
+      mockReq({
+        params: { statusPageId: PAGE } as any,
+        body: { accentColor: "#FF0000", announcement: " Hi ", logoUrl: "", showIncidentHistory: false },
+      }),
+      res
+    );
+    expect(StatusPage.findOneAndUpdate.mock.calls[0]![1]).toEqual({
+      $set: { accentColor: "#ff0000", announcement: "Hi", logoUrl: "", showIncidentHistory: false },
+    });
+    expect(res.body).toMatchObject({
+      accentColor: "#ff0000",
+      announcement: "Hi",
+      logoUrl: "",
+      showIncidentHistory: true,
+    });
+
+    const bad = mockRes();
+    await updateStatusPage(
+      mockReq({ params: { statusPageId: PAGE } as any, body: { logoUrl: "javascript:alert(1)" } }),
+      bad
+    );
+    expect(bad.statusCode).toBe(400);
+  });
+
   test("404s pages owned by someone else", async () => {
     const res = mockRes();
     await updateStatusPage(

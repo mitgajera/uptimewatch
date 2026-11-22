@@ -1,4 +1,4 @@
-import { AlertChannel, Notification, User } from "db/client";
+import { AlertChannel, Notification, User, Website } from "db/client";
 import { deliver } from "../notify/channels";
 import { deliverToTargets, MAX_DELIVERY_ATTEMPTS, resolveTargets } from "../notify/dispatch";
 
@@ -10,8 +10,12 @@ function log(message: string, data: Record<string, unknown> = {}) {
 
 let running = false;
 
+export interface DispatchDeps {
+  deliver: typeof deliver;
+}
+
 /** Deliver pending notifications to each user's alert channels. */
-export async function dispatchPendingNotifications() {
+export async function dispatchPendingNotifications(deps: DispatchDeps = { deliver }) {
   if (running) return;
   running = true;
 
@@ -28,19 +32,39 @@ export async function dispatchPendingNotifications() {
     if (notifications.length === 0) return;
 
     const userIds = [...new Set(notifications.map((n) => n.userId))];
-    const [users, channels] = await Promise.all([
+    const websiteIds = [
+      ...new Set(notifications.filter((n) => n.websiteId).map((n) => String(n.websiteId))),
+    ];
+    const [users, channels, websites] = await Promise.all([
       User.find({ _id: { $in: userIds } }).select("email").lean(),
       // Disabled channels too: they decide whether the account-email fallback applies.
       AlertChannel.find({ userId: { $in: userIds } }).lean(),
+      websiteIds.length
+        ? Website.find({ _id: { $in: websiteIds } }).select("alertChannelIds").lean()
+        : Promise.resolve([]),
     ]);
     const emailByUser = new Map(users.map((u) => [String(u._id), u.email]));
+    // Per-monitor routing: which channels each monitor's alerts go to.
+    const routesByWebsite = new Map(
+      (websites as { _id: unknown; alertChannelIds?: unknown[] }[]).map((w) => [
+        String(w._id),
+        (w.alertChannelIds ?? []).map(String),
+      ])
+    );
 
     for (const notif of notifications) {
       const targets = resolveTargets(
         channels
           .filter((c) => c.userId === notif.userId)
-          .map((c) => ({ type: c.type, target: c.target, enabled: c.enabled })),
-        emailByUser.get(notif.userId)
+          .map((c) => ({
+            id: String(c._id),
+            type: c.type,
+            target: c.target,
+            chatId: c.chatId ?? null,
+            enabled: c.enabled,
+          })),
+        emailByUser.get(notif.userId),
+        notif.websiteId ? routesByWebsite.get(String(notif.websiteId)) ?? [] : []
       );
 
       const outcome = await deliverToTargets(
@@ -53,7 +77,7 @@ export async function dispatchPendingNotifications() {
         },
         targets,
         notif,
-        deliver,
+        deps.deliver,
         now.getTime()
       );
 

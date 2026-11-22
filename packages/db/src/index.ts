@@ -3,7 +3,14 @@ import mongoose from "mongoose";
 export { User } from "./models/User";
 export type { IUser } from "./models/User";
 export { Website, MONITOR_DEFAULTS, MONITOR_INTERVALS } from "./models/Website";
-export type { IWebsite, MonitorMethod, MonitorType } from "./models/Website";
+export type {
+  IWebsite,
+  MonitorMethod,
+  MonitorType,
+  KeywordMode,
+  DnsRecordType,
+  MonitorHeader,
+} from "./models/Website";
 export { WebsiteTick, TICK_RETENTION_DAYS, CHECK_ERROR_TYPES } from "./models/WebsiteTick";
 export type { IWebsiteTick, WebsiteStatus, CheckErrorType } from "./models/WebsiteTick";
 export { Notification } from "./models/Notification";
@@ -15,7 +22,7 @@ export type { IStatusPage } from "./models/StatusPage";
 export { Lease } from "./models/Lease";
 export type { ILease } from "./models/Lease";
 export { Incident } from "./models/Incident";
-export type { IIncident } from "./models/Incident";
+export type { IIncident, IIncidentUpdate, IncidentUpdateStatus } from "./models/Incident";
 
 let connectionPromise: Promise<typeof mongoose> | null = null;
 

@@ -57,7 +57,7 @@ function isPrivateIPv6(ip: string): boolean {
   return false;
 }
 
-function isPrivateAddress(ip: string): boolean {
+export function isPrivateAddress(ip: string): boolean {
   const kind = net.isIP(ip);
   if (kind === 4) return isPrivateIPv4(ip);
   if (kind === 6) return isPrivateIPv6(ip);
