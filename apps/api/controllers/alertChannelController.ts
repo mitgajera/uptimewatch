@@ -1,17 +1,19 @@
 import type { Request, Response } from "express";
-import { AlertChannel } from "db/client";
+import { AlertChannel, Website } from "db/client";
 import type { AlertChannelType } from "db/constants";
-import { deliver, validateChannelTarget } from "../notify/channels";
+import { deliver, maskTelegramToken, validateChannelTarget } from "../notify/channels";
 import { isValidId } from "../utils/websites";
 import { createAlertChannelSchema, parseBody, updateAlertChannelSchema } from "../validation";
 
 const MAX_CHANNELS_PER_USER = 10;
 
+// Telegram bot tokens are secrets: only a masked form leaves the server.
 const serialize = (c: any) => ({
   id: String(c._id),
   type: c.type,
   name: c.name,
-  target: c.target,
+  target: c.type === "telegram" ? maskTelegramToken(c.target) : c.target,
+  ...(c.type === "telegram" ? { chatId: c.chatId ?? "" } : {}),
   enabled: c.enabled,
   createdAt: c.createdAt,
 });
@@ -27,7 +29,7 @@ export const createAlertChannel = async (req: Request, res: Response) => {
   if (!body) return;
 
   const type = body.type as AlertChannelType;
-  const invalid = validateChannelTarget(type, body.target);
+  const invalid = validateChannelTarget(type, body.target, body.chatId);
   if (invalid) {
     res.status(400).json({ message: invalid });
     return;
@@ -43,6 +45,7 @@ export const createAlertChannel = async (req: Request, res: Response) => {
     type,
     name: body.name ?? "",
     target: body.target,
+    chatId: type === "telegram" ? body.chatId : null,
     enabled: body.enabled ?? true,
   });
   res.status(201).json(serialize(channel.toObject()));
@@ -70,8 +73,19 @@ export const updateAlertChannel = async (req: Request, res: Response) => {
   const body = parseBody(updateAlertChannelSchema, req, res);
   if (!body) return;
 
-  if (body.target !== undefined) {
-    const invalid = validateChannelTarget(existing.type, body.target);
+  const update: Record<string, unknown> = { ...body };
+  // Clients echo back the masked token they were shown; that means "unchanged".
+  if (existing.type === "telegram" && body.target === maskTelegramToken(existing.target)) {
+    delete update.target;
+  }
+  if (existing.type !== "telegram") delete update.chatId;
+
+  if (update.target !== undefined || update.chatId !== undefined) {
+    const invalid = validateChannelTarget(
+      existing.type,
+      (update.target as string | undefined) ?? existing.target,
+      (update.chatId as string | undefined) ?? existing.chatId
+    );
     if (invalid) {
       res.status(400).json({ message: invalid });
       return;
@@ -80,7 +94,7 @@ export const updateAlertChannel = async (req: Request, res: Response) => {
 
   const updated = await AlertChannel.findOneAndUpdate(
     { _id: existing._id, userId: req.userId! },
-    { $set: body },
+    { $set: update },
     { new: true }
   ).lean();
   res.json(serialize(updated));
@@ -90,6 +104,11 @@ export const deleteAlertChannel = async (req: Request, res: Response) => {
   const existing = await findOwnedChannel(req, res);
   if (!existing) return;
   await AlertChannel.deleteOne({ _id: existing._id, userId: req.userId! });
+  // Monitors routed to this channel fall back to the remaining ones.
+  await Website.updateMany(
+    { userId: req.userId!, alertChannelIds: existing._id },
+    { $pull: { alertChannelIds: existing._id } }
+  );
   res.json({ message: "Alert channel deleted." });
 };
 
@@ -127,7 +146,7 @@ export const testAlertChannel = async (req: Request, res: Response) => {
   }
 
   const result = await deliver(
-    { type: channel.type, target: channel.target },
+    { type: channel.type, target: channel.target, chatId: channel.chatId ?? null },
     {
       kind: "TEST",
       subject: "✅ UptimeWatch test alert",

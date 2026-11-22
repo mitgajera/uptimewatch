@@ -1,4 +1,5 @@
 import { Schema, model, models, Types, Model } from "mongoose";
+import { DEFAULT_ACCENT_COLOR } from "../constants";
 
 export interface IStatusPage {
   _id: Types.ObjectId;
@@ -10,6 +11,13 @@ export interface IStatusPage {
   websiteIds: Types.ObjectId[];
   /** Unpublished pages are only visible to their owner. */
   published: boolean;
+  /** "" or an https image URL. */
+  logoUrl: string;
+  /** "#rrggbb". */
+  accentColor: string;
+  announcement: string;
+  /** When false, only ongoing incidents are listed publicly. */
+  showIncidentHistory: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -29,6 +37,10 @@ const statusPageSchema = new Schema<IStatusPage>(
     description: { type: String, default: "", maxlength: 500 },
     websiteIds: [{ type: Schema.Types.ObjectId, ref: "Website" }],
     published: { type: Boolean, default: true },
+    logoUrl: { type: String, default: "", maxlength: 500 },
+    accentColor: { type: String, default: DEFAULT_ACCENT_COLOR, match: /^#[0-9a-fA-F]{6}$/ },
+    announcement: { type: String, default: "", maxlength: 500 },
+    showIncidentHistory: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

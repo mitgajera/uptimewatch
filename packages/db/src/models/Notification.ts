@@ -1,6 +1,7 @@
 import { Schema, model, models, Types, Model } from "mongoose";
+import { NOTIFICATION_KINDS, type NotificationKind } from "../constants";
 
-export type NotificationKind = "DOWN" | "UP" | "SSL_EXPIRY" | "TEST";
+export type { NotificationKind };
 
 export interface INotification {
   _id: Types.ObjectId;
@@ -25,7 +26,7 @@ const notificationSchema = new Schema<INotification>(
   {
     userId: { type: String, required: true, index: true },
     websiteId: { type: Schema.Types.ObjectId, ref: "Website", default: null },
-    kind: { type: String, enum: ["DOWN", "UP", "SSL_EXPIRY", "TEST"], default: null },
+    kind: { type: String, enum: NOTIFICATION_KINDS, default: null },
     subject: { type: String, default: null },
     message: { type: String, required: true },
     sent: { type: Boolean, default: false },

@@ -8,8 +8,10 @@ export interface IAlertChannel {
   userId: string; // Clerk user id (User._id)
   type: AlertChannelType;
   name: string;
-  /** Email address for "email", webhook URL for the others. */
+  /** Email address for "email", bot token for "telegram", webhook/topic URL for the others. */
   target: string;
+  /** Telegram chat id (numeric or @channel). */
+  chatId?: string | null;
   enabled: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -21,6 +23,7 @@ const alertChannelSchema = new Schema<IAlertChannel>(
     type: { type: String, enum: ALERT_CHANNEL_TYPES, required: true },
     name: { type: String, default: "", maxlength: 100 },
     target: { type: String, required: true, maxlength: 2048 },
+    chatId: { type: String, default: null, maxlength: 100 },
     enabled: { type: Boolean, default: true },
   },
   { timestamps: true }

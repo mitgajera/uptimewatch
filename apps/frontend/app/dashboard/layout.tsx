@@ -1,15 +1,26 @@
 import { QueryProvider } from "@/components/providers/query-provider";
-import { DashboardNav } from "./dashboard-nav";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { AppSidebar } from "@/components/app/app-sidebar";
+import { AppTopbar } from "@/components/app/app-topbar";
+import { CommandMenuProvider } from "@/components/app/command-menu";
+import { UserSync } from "@/components/layout/user-sync";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <QueryProvider>
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 md:grid-cols-[180px_minmax(0,1fr)] md:gap-10 md:py-10">
-        <aside className="md:sticky md:top-24 md:self-start">
-          <DashboardNav />
-        </aside>
-        <main className="min-w-0">{children}</main>
-      </div>
+      <UserSync />
+      <TooltipProvider delayDuration={200}>
+        <CommandMenuProvider>
+          <SidebarProvider>
+            <AppSidebar />
+            <SidebarInset className="min-w-0 bg-background">
+              <AppTopbar />
+              <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
+            </SidebarInset>
+          </SidebarProvider>
+        </CommandMenuProvider>
+      </TooltipProvider>
     </QueryProvider>
   );
 }

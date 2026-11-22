@@ -15,7 +15,8 @@ const AlertChannel = {
   create: mock(async (doc: any) => ({ toObject: () => ({ _id: "c1", ...doc }) })),
   deleteOne: mock(async (..._a: any[]) => ({})),
 };
-mockDb({ AlertChannel });
+const Website = { updateMany: mock(async (..._a: any[]) => ({ matchedCount: 0 })) };
+mockDb({ AlertChannel, Website });
 
 const { createAlertChannel, updateAlertChannel, deleteAlertChannel, testAlertChannel, resetTestSendLimits } = await import(
   "../controllers/alertChannelController"
@@ -43,6 +44,7 @@ const ID = "65a000000000000000000001";
 
 beforeEach(() => {
   for (const m of Object.values(AlertChannel)) m.mockReset();
+  Website.updateMany.mockClear();
   AlertChannel.countDocuments.mockResolvedValue(0);
   AlertChannel.create.mockImplementation(async (doc: any) => ({
     toObject: () => ({ _id: "c1", ...doc }),
@@ -106,6 +108,11 @@ describe("update/delete", () => {
     await deleteAlertChannel(mockReq({ params: { channelId: ID } as any }), res);
     expect(res.statusCode).toBe(200);
     expect(AlertChannel.deleteOne).toHaveBeenCalledWith({ _id: ID, userId: "user_1" });
+    // Monitors routed to the channel stop referencing it.
+    expect(Website.updateMany).toHaveBeenCalledWith(
+      { userId: "user_1", alertChannelIds: ID },
+      { $pull: { alertChannelIds: ID } }
+    );
   });
 });
 

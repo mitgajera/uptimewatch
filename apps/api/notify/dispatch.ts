@@ -6,23 +6,35 @@ export const RETRY_BACKOFF_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000, 2
 export const MAX_DELIVERY_ATTEMPTS = RETRY_BACKOFF_MS.length + 1;
 
 /**
- * Resolve where a user's alerts go: their enabled channels, or — when they
+ * Resolve where an alert goes: the user's enabled channels, or — when they
  * have configured none at all — their account email, so alerts work out of
  * the box. Disabling every channel mutes alerts rather than falling back.
+ *
+ * When the alert's monitor routes to specific channels (`monitorChannelIds`),
+ * only those that are enabled receive it. Ids of since-deleted channels are
+ * ignored; if none of the routed channels exist any more, all enabled
+ * channels are used.
  */
 export function resolveTargets(
-  channels: (ChannelTarget & { enabled?: boolean })[],
-  accountEmail: string | null | undefined
+  channels: (ChannelTarget & { enabled?: boolean; id?: string })[],
+  accountEmail: string | null | undefined,
+  monitorChannelIds: string[] = []
 ): ChannelTarget[] {
   if (channels.length > 0) {
-    return channels.filter((c) => c.enabled !== false).map(({ type, target }) => ({ type, target }));
+    const routed = new Set(monitorChannelIds.map(String));
+    const existing = channels.filter((c) => c.id !== undefined && routed.has(String(c.id)));
+    const pool = existing.length > 0 ? existing : channels;
+    return pool
+      .filter((c) => c.enabled !== false)
+      .map(({ type, target, chatId }) => (chatId ? { type, target, chatId } : { type, target }));
   }
   return accountEmail ? [{ type: "email", target: accountEmail }] : [];
 }
 
 /** Stable id for a target that doesn't store its (possibly secret) URL. */
 export function targetKey(target: ChannelTarget): string {
-  return createHash("sha256").update(`${target.type}:${target.target}`).digest("hex").slice(0, 16);
+  const key = `${target.type}:${target.target}${target.chatId ? `:${target.chatId}` : ""}`;
+  return createHash("sha256").update(key).digest("hex").slice(0, 16);
 }
 
 export interface DeliveryState {

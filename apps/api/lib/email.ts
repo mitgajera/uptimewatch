@@ -1,4 +1,5 @@
 import { resend } from "../utils/resendClient";
+import { getSmtpTransport, smtpConfigured } from "../utils/smtpClient";
 
 export const sendEmail = async ({
   to,
@@ -18,6 +19,21 @@ export const sendEmail = async ({
 
   if (!text) {
     return { ok: false, error: "Text content must be provided." };
+  }
+
+  // SMTP (Brevo, Gmail, Mailjet, ...) when configured: sends to any address
+  // from a single verified sender, no domain required.
+  if (smtpConfigured()) {
+    const from = process.env.EMAIL_FROM || process.env.SMTP_USER;
+    if (!from) {
+      return { ok: false, error: "Set EMAIL_FROM to your verified sender address." };
+    }
+    try {
+      await getSmtpTransport().sendMail({ from, to, subject, text });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: `SMTP: ${err instanceof Error ? err.message : String(err)}` };
+    }
   }
 
   if (!process.env.RESEND_API_KEY) {

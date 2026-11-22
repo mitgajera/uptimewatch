@@ -127,7 +127,11 @@ describe("getAllWebsites", () => {
 describe("getAllWebsites 24h stats", () => {
   test("attaches uptime, latency and check counts from the aggregate", async () => {
     Website.find.mockReturnValue(query([{ _id: "a", url: "https://a.dev" }]));
-    WebsiteTick.aggregate.mockResolvedValue([{ _id: "a", total: 8, up: 7, avgLatency: 123.4 }]);
+    const hour = Math.floor(Date.now() / 3_600_000) * 3_600_000;
+    WebsiteTick.aggregate.mockResolvedValue([
+      { _id: { w: "a", h: hour }, total: 4, up: 4, latencySum: 400 },
+      { _id: { w: "a", h: hour - 3_600_000 }, total: 4, up: 3, latencySum: 587 },
+    ]);
     const res = mockRes();
     await getAllWebsites(mockReq(), res);
     expect(res.body.websites[0]).toMatchObject({
@@ -135,6 +139,10 @@ describe("getAllWebsites 24h stats", () => {
       avgLatency24h: 123,
       checks24h: 8,
     });
+    const sparkline = res.body.websites[0].sparkline;
+    expect(sparkline).toHaveLength(24);
+    expect(sparkline.slice(-2)).toEqual([147, 100]);
+    expect(sparkline.slice(0, 22).every((v: number) => v === 0)).toBe(true);
   });
 });
 
@@ -186,6 +194,8 @@ describe("createWebsite", () => {
       url: PUBLIC_URL,
       name: "API",
       intervalSeconds: 300,
+      host: "",
+      port: null,
       userId: "user_1",
       disabled: false,
     });

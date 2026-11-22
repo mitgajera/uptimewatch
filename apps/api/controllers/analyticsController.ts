@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { Website, WebsiteTick, Incident } from "db/client";
 import { RANGES, percentile, average, uptimePercent } from "../utils/stats";
 import { findUserWebsiteOr404 } from "../utils/websites";
+import { serializeIncident } from "../utils/incidents";
 
 /**
  * Dashboard summary across all of the user's monitors.
@@ -110,7 +111,7 @@ export const getWebsiteAnalytics = async (req: Request, res: Response) => {
 };
 
 /**
- * Incident history for a website.
+ * Incident history for a website, as `IncidentDetail`s.
  */
 export const getWebsiteIncidents = async (req: Request, res: Response) => {
   const userId = req.userId!;
@@ -124,16 +125,5 @@ export const getWebsiteIncidents = async (req: Request, res: Response) => {
     .limit(50)
     .lean();
 
-  res.json({
-    incidents: incidents.map((i) => ({
-      id: String(i._id),
-      startedAt: i.startedAt,
-      resolvedAt: i.resolvedAt,
-      durationMs: i.durationMs,
-      ongoing: i.ongoing,
-      lastStatusCode: i.lastStatusCode,
-      errorType: i.errorType ?? null,
-      errorMessage: i.errorMessage ?? null,
-    })),
-  });
+  res.json({ incidents: incidents.map((i) => serializeIncident(i, website)) });
 };

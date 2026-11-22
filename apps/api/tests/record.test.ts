@@ -10,7 +10,7 @@ const Incident = {
 const Notification = { create: mock(async (..._a: any[]) => ({})) };
 mockDb({ Website, WebsiteTick, Incident, Notification });
 
-const { recordCheckResult } = await import("../monitor/record");
+const { recordCheckResult, reminderDue } = await import("../monitor/record");
 
 const UP = { status: "UP", latency: 120, statusCode: 200, errorType: null, errorMessage: null } as const;
 const DOWN = { status: "DOWN", latency: 0, statusCode: 503, errorType: "HTTP_STATUS", errorMessage: "503" } as const;
@@ -97,5 +97,94 @@ describe("recordCheckResult", () => {
 
     expect(Website.updateOne.mock.calls[0]![1].$set).toMatchObject({ isDown: false, consecutiveFailures: 1 });
     expect(Incident.updateOne).not.toHaveBeenCalled();
+  });
+});
+
+describe("recordCheckResult: degraded, errors and recovery notes", () => {
+  test("stores the error message with the state", async () => {
+    await recordCheckResult(site({ failureThreshold: 3 }), DOWN);
+    expect(Website.updateOne.mock.calls[0]![1].$set).toMatchObject({ lastErrorType: "HTTP_STATUS", lastErrorMessage: "503" });
+  });
+
+  test("an UP check slower than the threshold marks the monitor degraded", async () => {
+    await recordCheckResult(site({ degradedThresholdMs: 100 }), UP); // 120ms
+    expect(Website.updateOne.mock.calls[0]![1].$set.isDegraded).toBe(true);
+
+    await recordCheckResult(site({ degradedThresholdMs: 500 }), UP);
+    expect(Website.updateOne.mock.calls[1]![1].$set.isDegraded).toBe(false);
+
+    // Off by default, and never for failed checks or dns monitors.
+    await recordCheckResult(site(), UP);
+    expect(Website.updateOne.mock.calls[2]![1].$set.isDegraded).toBe(false);
+    await recordCheckResult(site({ degradedThresholdMs: 100, failureThreshold: 3 }), { ...DOWN, latency: 5000 });
+    expect(Website.updateOne.mock.calls[3]![1].$set.isDegraded).toBe(false);
+    await recordCheckResult(site({ type: "dns", degradedThresholdMs: 100 }), UP);
+    expect(Website.updateOne.mock.calls[4]![1].$set.isDegraded).toBe(false);
+  });
+
+  test("recovery appends an automatic, private resolved update", async () => {
+    const incident = { startedAt: new Date(Date.now() - 120_000), ongoing: true, updates: [] as any[], save: mock(async () => {}) } as any;
+    Incident.findOne.mockImplementation(() => ({ sort: async () => incident }));
+    await recordCheckResult(site({ isDown: true }), UP);
+    expect(incident.updates).toHaveLength(1);
+    expect(incident.updates[0]).toMatchObject({ status: "resolved", public: false });
+    expect(incident.updates[0].at).toBeInstanceOf(Date);
+  });
+
+  test("a new incident resets the reminder schedule", async () => {
+    await recordCheckResult(site(), DOWN);
+    expect(Website.updateOne.mock.calls[0]![1].$set.lastReminderAt).toBeNull();
+  });
+});
+
+describe("reminders", () => {
+  const MIN = 60_000;
+
+  test("reminderDue counts from the incident start, then from the last reminder", () => {
+    const start = new Date(0);
+    expect(reminderDue({ reminderMinutes: 0 }, start, 999 * MIN)).toBe(false);
+    expect(reminderDue({ reminderMinutes: 15 }, start, 14 * MIN)).toBe(false);
+    expect(reminderDue({ reminderMinutes: 15 }, start, 15 * MIN)).toBe(true);
+    expect(reminderDue({ reminderMinutes: 15, lastReminderAt: new Date(15 * MIN) }, start, 20 * MIN)).toBe(false);
+    expect(reminderDue({ reminderMinutes: 15, lastReminderAt: new Date(15 * MIN) }, start, 30 * MIN)).toBe(true);
+    // A reminder from an earlier incident doesn't delay this one.
+    expect(reminderDue({ reminderMinutes: 15, lastReminderAt: new Date(-5 * MIN) }, start, 15 * MIN)).toBe(true);
+  });
+
+  test("queues a REMINDER while a monitor stays down, claimed with compare-and-set", async () => {
+    const startedAt = new Date(Date.now() - 20 * MIN);
+    Incident.findOne.mockImplementation(() => ({ sort: async () => ({ startedAt }) }));
+    const checkedAt = new Date();
+
+    await recordCheckResult(site({ isDown: true, reminderMinutes: 15, lastReminderAt: null }), DOWN, checkedAt);
+
+    const [claimFilter, claimUpdate] = Website.updateOne.mock.calls[1]!;
+    expect(claimFilter).toEqual({ _id: "w1", isDown: true, lastReminderAt: null });
+    expect(claimUpdate).toEqual({ $set: { lastReminderAt: checkedAt } });
+    const notif = Notification.create.mock.calls[0]![0];
+    expect(notif).toMatchObject({ kind: "REMINDER", websiteId: "w1", userId: "u1" });
+    expect(notif.subject).toContain("still DOWN");
+  });
+
+  test("no reminder before it is due, when off, or when another run claimed it", async () => {
+    Incident.findOne.mockImplementation(() => ({ sort: async () => ({ startedAt: new Date(Date.now() - 5 * MIN) }) }));
+    await recordCheckResult(site({ isDown: true, reminderMinutes: 15 }), DOWN);
+    expect(Notification.create).not.toHaveBeenCalled();
+
+    Incident.findOne.mockImplementation(() => ({ sort: async () => ({ startedAt: new Date(Date.now() - 60 * MIN) }) }));
+    await recordCheckResult(site({ isDown: true, reminderMinutes: 0 }), DOWN);
+    expect(Notification.create).not.toHaveBeenCalled();
+
+    Website.updateOne.mockImplementation(async (filter: any) => ({ matchedCount: "lastReminderAt" in filter ? 0 : 1 }));
+    await recordCheckResult(site({ isDown: true, reminderMinutes: 15 }), DOWN);
+    expect(Notification.create).not.toHaveBeenCalled();
+  });
+
+  test("no reminder on recovery", async () => {
+    Incident.findOne.mockImplementation(() => ({
+      sort: async () => ({ startedAt: new Date(Date.now() - 60 * MIN), updates: [], save: async () => {} }),
+    }));
+    await recordCheckResult(site({ isDown: true, reminderMinutes: 15 }), UP);
+    expect(Notification.create.mock.calls.map((c: any) => c[0].kind)).toEqual(["UP"]);
   });
 });

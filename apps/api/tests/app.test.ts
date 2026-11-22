@@ -48,13 +48,13 @@ describe("app", () => {
   test("public routes do not require auth", async () => {
     const res = await fetch(`${base}/api/v1/public/status-pages/!!`);
     expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ error: "Status page not found." });
+    expect(await res.json()).toEqual({ error: "Status page not found.", message: "Status page not found." });
   });
 
   test("unknown routes return JSON 404", async () => {
     const res = await fetch(`${base}/nope`);
     expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ error: "Not found" });
+    expect(await res.json()).toEqual({ error: "Not found", message: "Not found" });
   });
 
   test("heartbeats only accept GET, HEAD and POST", async () => {
@@ -68,8 +68,8 @@ describe("app", () => {
       fetch(`${base}/nope`, { method: "POST", headers: { "Content-Type": "application/json" }, body });
     const bad = await post("{not json");
     expect(bad.status).toBe(400);
-    expect(await bad.json()).toEqual({ error: "Bad request" });
-    const big = await post(JSON.stringify({ x: "a".repeat(20_000) }));
+    expect(await bad.json()).toEqual({ error: "Bad request", message: "Bad request" });
+    const big = await post(JSON.stringify({ x: "a".repeat(40_000) }));
     expect(big.status).toBe(413);
   });
 });

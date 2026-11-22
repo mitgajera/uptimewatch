@@ -83,3 +83,38 @@ describe("deliverToTargets", () => {
     expect(outcome.lastError).toContain("No enabled alert channels");
   });
 });
+
+describe("resolveTargets per-monitor routing", () => {
+  const a = { id: "c1", type: "slack" as const, target: "https://hooks.slack.com/services/a", enabled: true };
+  const b = { id: "c2", type: "email" as const, target: "ops@acme.dev", enabled: true };
+  const c = { id: "c3", type: "telegram" as const, target: "1:tok", chatId: "-1", enabled: false };
+
+  test("an empty route list means every enabled channel", () => {
+    expect(resolveTargets([a, b, c], "me@acme.dev", [])).toEqual([
+      { type: "slack", target: a.target },
+      { type: "email", target: b.target },
+    ]);
+  });
+
+  test("only routed, enabled channels receive the alert", () => {
+    expect(resolveTargets([a, b, c], "me@acme.dev", ["c2"])).toEqual([{ type: "email", target: b.target }]);
+    // A routed but disabled channel mutes the monitor rather than widening delivery.
+    expect(resolveTargets([a, b, c], "me@acme.dev", ["c3"])).toEqual([]);
+  });
+
+  test("routes to deleted channels fall back to every enabled channel", () => {
+    expect(resolveTargets([a, b], "me@acme.dev", ["gone"])).toHaveLength(2);
+  });
+
+  test("the account email fallback still applies when the user has no channels", () => {
+    expect(resolveTargets([], "me@acme.dev", ["c1"])).toEqual([{ type: "email", target: "me@acme.dev" }]);
+  });
+
+  test("telegram chat ids are carried and part of the target key", () => {
+    const tg = { id: "t", type: "telegram" as const, target: "1:tok", chatId: "-1", enabled: true };
+    expect(resolveTargets([tg], null)).toEqual([{ type: "telegram", target: "1:tok", chatId: "-1" }]);
+    expect(targetKey({ type: "telegram", target: "1:tok", chatId: "-1" })).not.toBe(
+      targetKey({ type: "telegram", target: "1:tok", chatId: "-2" })
+    );
+  });
+});
