@@ -1,10 +1,13 @@
-import type { CheckErrorType, Monitor } from "@/lib/api/types";
+import type { CheckErrorType, Monitor, MonitorType } from "@/lib/api/types";
 
-export type MonitorState = "up" | "down" | "maintenance" | "paused" | "pending";
+export type MonitorState = "up" | "degraded" | "down" | "maintenance" | "paused" | "pending";
 
 /** Current state of a monitor as shown in the UI. */
 export function monitorState(
-  m: Pick<Monitor, "paused" | "isDown" | "lastCheckedAt" | "websiteTicks" | "maintenanceUntil" | "lastHeartbeatAt">,
+  m: Pick<
+    Monitor,
+    "paused" | "isDown" | "isDegraded" | "lastCheckedAt" | "websiteTicks" | "maintenanceUntil" | "lastHeartbeatAt"
+  >,
   now = Date.now()
 ): MonitorState {
   if (m.paused) return "paused";
@@ -12,24 +15,44 @@ export function monitorState(
   if (m.isDown) return "down";
   // A heartbeat's first ping counts as activity before the scheduler's first tick.
   if (!m.lastCheckedAt && !m.lastHeartbeatAt && !(m.websiteTicks?.length > 0)) return "pending";
+  if (m.isDegraded) return "degraded";
   return "up";
 }
 
 export const STATE_LABEL: Record<MonitorState, string> = {
-  up: "Up",
+  up: "Operational",
+  degraded: "Degraded",
   down: "Down",
   maintenance: "Maintenance",
   paused: "Paused",
   pending: "Pending",
 };
 
+/** Sort weight: problems first. */
+export const STATE_ORDER: Record<MonitorState, number> = {
+  down: 0,
+  degraded: 1,
+  pending: 2,
+  maintenance: 3,
+  up: 4,
+  paused: 5,
+};
+
+export const TYPE_LABEL: Record<MonitorType, string> = {
+  http: "HTTP",
+  tcp: "TCP port",
+  dns: "DNS",
+  heartbeat: "Heartbeat",
+};
+
 const ERROR_LABELS: Record<CheckErrorType, string> = {
   DNS: "DNS lookup failed",
+  DNS_MISMATCH: "DNS answer mismatch",
   TIMEOUT: "Timed out",
   CONNECTION: "Connection failed",
   TLS: "TLS/SSL error",
   HTTP_STATUS: "Unexpected status code",
-  KEYWORD: "Keyword not found",
+  KEYWORD: "Keyword check failed",
   BLOCKED: "Blocked address",
   MISSED: "Heartbeat missed",
   UNKNOWN: "Unknown error",
@@ -88,8 +111,24 @@ export function hostnameOf(url: string): string {
   }
 }
 
-export function displayName(m: Pick<Monitor, "name" | "url">): string {
-  return m.name?.trim() || hostnameOf(m.url) || "Heartbeat";
+export function displayName(m: Pick<Monitor, "name" | "url"> & Partial<Pick<Monitor, "host" | "type">>): string {
+  return m.name?.trim() || hostnameOf(m.url) || m.host || (m.type === "heartbeat" ? "Heartbeat" : "Monitor");
+}
+
+/** What the monitor points at, for secondary text: URL host, host:port, record lookup. */
+export function monitorTarget(
+  m: Pick<Monitor, "type" | "url"> & Partial<Pick<Monitor, "host" | "port" | "dnsRecordType" | "intervalSeconds">>
+): string {
+  switch (m.type) {
+    case "tcp":
+      return `${m.host ?? ""}:${m.port ?? ""}`;
+    case "dns":
+      return `${m.dnsRecordType ?? "A"} ${m.host ?? ""}`;
+    case "heartbeat":
+      return `Expects a ping every ${formatInterval(m.intervalSeconds ?? 60)}`;
+    default:
+      return m.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  }
 }
 
 /** Public ping URL for a heartbeat monitor. */
